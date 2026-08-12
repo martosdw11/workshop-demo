@@ -77,7 +77,19 @@
    * Dark mode (PRD §7.7): pergeseran slate/zinc, BUKAN hitam murni, untuk
    * mengurangi kelelahan mata pada sesi belajar panjang. Nama token tidak
    * berubah — hanya nilainya, sehingga komponen tidak perlu tahu tema aktif.
-   * Kalibrasi kontras final dikerjakan di EPIC 8 Story 8.2.
+   *
+   * DUA PEMICU, SATU PALET:
+   *   1. `.dark` pada <html> — escape hatch bila kelak ada pemilih tema
+   *      (PRD/TDD §6 tidak memuat widget pemilih tema, jadi MVP tidak
+   *      menambahkannya — itu akan menjadi scope creep);
+   *   2. `prefers-color-scheme: dark` — preferensi sistem pengguna, yang pada
+   *      MVP adalah SATU-SATUNYA cara dark mode aktif.
+   *
+   * Kelas `.light` mematikan pemicu (2) bila suatu saat dibutuhkan.
+   *
+   * ⚠️ Blok di bawah dan blok di dalam `@media` WAJIB tetap identik. CSS tidak
+   * mengizinkan satu deklarasi dipakai dua selector yang salah satunya berada
+   * di dalam media query, sehingga duplikasi ini disengaja — bukan kelalaian.
    */
   .dark {
     --color-surface: 15 23 42; /* slate-900 */
@@ -114,10 +126,76 @@
     --color-tertiary-container: 101 62 0; /* #653e00 */
     --color-on-tertiary-container: 255 221 184; /* #ffddb8 */
 
+    /* Pasangan `*-fixed` ikut digelapkan: badge poin & status memakainya, dan
+       nilai terangnya akan menabrak kontras 4.5:1 di atas surface gelap. */
+    --color-primary-fixed: 51 35 204; /* #3323cc */
+    --color-on-primary-fixed: 226 223 255; /* #e2dfff */
+    --color-secondary-fixed: 0 76 110; /* #004c6e */
+    --color-on-secondary-fixed: 201 230 255; /* #c9e6ff */
+    --color-on-secondary-fixed-variant: 137 206 255; /* #89ceff */
+    --color-tertiary-fixed: 101 62 0; /* #653e00 */
+    --color-on-tertiary-fixed: 255 221 184; /* #ffddb8 */
+    --color-on-tertiary-fixed-variant: 255 185 95; /* #ffb95f */
+
     --color-error: 255 180 171; /* error dark tone */
     --color-on-error: 105 0 5;
     --color-error-container: 147 0 10; /* #93000a */
     --color-on-error-container: 255 218 214; /* #ffdad6 */
+  }
+
+  /* Salinan identik dari blok `.dark` di atas — lihat catatan di sana. */
+  @media (prefers-color-scheme: dark) {
+    :root:not(.light) {
+      --color-surface: 15 23 42; /* slate-900 */
+      --color-surface-dim: 2 6 23; /* slate-950 */
+      --color-surface-bright: 30 41 59; /* slate-800 */
+      --color-surface-container-lowest: 2 6 23; /* slate-950 */
+      --color-surface-container-low: 15 23 42; /* slate-900 */
+      --color-surface-container: 30 41 59; /* slate-800 */
+      --color-surface-container-high: 51 65 85; /* slate-700 */
+      --color-surface-container-highest: 71 85 105; /* slate-600 */
+      --color-surface-variant: 51 65 85; /* slate-700 */
+      --color-background: 2 6 23; /* slate-950 */
+      --color-on-background: 226 232 240; /* slate-200 */
+
+      --color-on-surface: 226 232 240; /* slate-200 */
+      --color-on-surface-variant: 148 163 184; /* slate-400 */
+      --color-inverse-surface: 226 232 240; /* slate-200 */
+      --color-inverse-on-surface: 15 23 42; /* slate-900 */
+      --color-outline: 100 116 139; /* slate-500 */
+      --color-outline-variant: 51 65 85; /* slate-700 */
+
+      --color-primary: 195 192 255; /* #c3c0ff — inverse-primary */
+      --color-on-primary: 15 0 105; /* #0f0069 */
+      --color-primary-container: 51 35 204; /* #3323cc */
+      --color-on-primary-container: 226 223 255; /* #e2dfff */
+
+      --color-secondary: 137 206 255; /* #89ceff */
+      --color-on-secondary: 0 30 47; /* #001e2f */
+      --color-secondary-container: 0 76 110; /* #004c6e */
+      --color-on-secondary-container: 201 230 255; /* #c9e6ff */
+
+      --color-tertiary: 255 185 95; /* #ffb95f */
+      --color-on-tertiary: 42 23 0; /* #2a1700 */
+      --color-tertiary-container: 101 62 0; /* #653e00 */
+      --color-on-tertiary-container: 255 221 184; /* #ffddb8 */
+
+      /* Pasangan `*-fixed` ikut digelapkan: badge poin & status memakainya, dan
+         nilai terangnya akan menabrak kontras 4.5:1 di atas surface gelap. */
+      --color-primary-fixed: 51 35 204; /* #3323cc */
+      --color-on-primary-fixed: 226 223 255; /* #e2dfff */
+      --color-secondary-fixed: 0 76 110; /* #004c6e */
+      --color-on-secondary-fixed: 201 230 255; /* #c9e6ff */
+      --color-on-secondary-fixed-variant: 137 206 255; /* #89ceff */
+      --color-tertiary-fixed: 101 62 0; /* #653e00 */
+      --color-on-tertiary-fixed: 255 221 184; /* #ffddb8 */
+      --color-on-tertiary-fixed-variant: 255 185 95; /* #ffb95f */
+
+      --color-error: 255 180 171; /* error dark tone */
+      --color-on-error: 105 0 5;
+      --color-error-container: 147 0 10; /* #93000a */
+      --color-on-error-container: 255 218 214; /* #ffdad6 */
+    }
   }
 
   html {
@@ -135,5 +213,59 @@
    */
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-primary;
+  }
+
+  /*
+   * Material Symbols Outlined — DI-SELF-HOST lewat next/font/local
+   * (src/app/layout.tsx), bukan <link> ke fonts.googleapis.com seperti mockup.
+   * CSP produksi memakai `font-src 'self'` (next.config.ts), sehingga font dari
+   * CDN eksternal akan diblokir — self-hosting bukan preferensi, tapi syarat.
+   *
+   * `font-variation-settings` mengekspos sumbu FILL supaya `MaterialIcon`
+   * bisa mengganti ikon garis ↔ ikon padat tanpa memuat file font kedua.
+   */
+  .material-symbols-outlined {
+    font-family: var(--font-material-symbols), sans-serif;
+    font-weight: normal;
+    font-style: normal;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    font-feature-settings: 'liga';
+    -webkit-font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
+    font-variation-settings:
+      'FILL' var(--ms-fill, 0),
+      'wght' var(--ms-wght, 400),
+      'GRAD' 0,
+      'opsz' 24;
+    user-select: none;
+  }
+
+  .material-symbols-outlined[data-filled='true'] {
+    --ms-fill: 1;
+  }
+}
+
+@layer components {
+  /*
+   * Konten materi (`content_html` tersanitasi server, TDD §8.4) dirender dengan
+   * plugin typography. Warnanya dipetakan ke token design system supaya dark mode
+   * ikut bergeser tanpa satu pun nilai literal.
+   */
+  .prose-material {
+    @apply prose max-w-none text-body-lg text-on-surface;
+    @apply prose-headings:text-on-surface prose-headings:font-sans;
+    @apply prose-p:text-body-lg prose-p:text-on-surface;
+    @apply prose-li:text-body-lg prose-li:text-on-surface;
+    @apply prose-strong:text-on-surface;
+    @apply prose-a:text-primary prose-a:underline;
+    @apply prose-code:text-on-surface-variant prose-code:before:content-none prose-code:after:content-none;
+    @apply prose-pre:bg-surface-container-high prose-pre:text-on-surface;
+    @apply prose-img:rounded-lg prose-img:border prose-img:border-outline-variant;
   }
 }

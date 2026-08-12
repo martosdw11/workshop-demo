@@ -1,5 +1,6 @@
 import type { Config } from 'tailwindcss';
 import typography from '@tailwindcss/typography';
+import animate from 'tailwindcss-animate';
 
 /**
  * Token diambil APA ADANYA dari design system "Adaptive Scholastic Narrative"
@@ -120,7 +121,16 @@ const config: Config = {
       sm: '0.25rem', // 4px  — checkbox, badge kecil
       DEFAULT: '0.5rem', // 8px
       md: '0.75rem', // 12px
-      lg: '1rem', // 16px
+      /**
+       * ASUMSI EKSPLISIT (A-F01): frontmatter DESIGN.md menulis `lg: 1rem` (16px),
+       * sementara PRD §7.5 dan prosa DESIGN.md ("Main Components: Buttons, Cards,
+       * and Inputs use `rounded-lg` (12px)") menulis 12px untuk token yang SAMA.
+       * Yang dimenangkan adalah PRD + prosa DESIGN.md, karena keduanya menyebut
+       * angka radius yang mengikat komponen. Akibatnya `rounded-md` dan
+       * `rounded-lg` sama-sama 12px — disengaja, supaya primitif shadcn/ui yang
+       * memakai `rounded-md` tetap menghasilkan radius produksi yang benar.
+       */
+      lg: '0.75rem', // 12px — tombol, kartu, input (PRD §7.5)
       xl: '1.5rem', // 24px — modal & sheet
       full: '9999px', // pill badge
     },
@@ -146,6 +156,16 @@ const config: Config = {
         sans: ['var(--font-inter)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
 
+      /**
+       * `theme.colors` diganti total (bukan extend), sehingga fallback bawaan
+       * Tailwind (`gray.200`) hilang dan `border` polos akan jatuh ke
+       * `currentColor` — menghasilkan garis berwarna teks. Level 1 elevasi
+       * DESIGN.md memakai border 1px `outline-variant`, jadi itulah defaultnya.
+       */
+      borderColor: { DEFAULT: token('outline-variant') },
+      ringColor: { DEFAULT: token('primary') },
+      divideColor: { DEFAULT: token('outline-variant') },
+
       // Grid 12 kolom desktop / 8 tablet / 4 mobile (§2 PRD)
       screens: {
         sm: '640px',
@@ -164,9 +184,27 @@ const config: Config = {
       height: { progress: '6px' },
 
       outlineWidth: { 2: '2px' },
+
+      /**
+       * Animasi masuk/keluar Radix (dialog, sheet, dropdown, tooltip) dijalankan
+       * `tailwindcss-animate` lewat `data-[state=…]`. Keyframes slide khusus
+       * dibutuhkan `Sheet` karena ia masuk dari tepi layar, bukan dari pusat.
+       */
+      keyframes: {
+        'slide-in-right': { from: { transform: 'translateX(100%)' }, to: { transform: 'translateX(0)' } },
+        'slide-out-right': { from: { transform: 'translateX(0)' }, to: { transform: 'translateX(100%)' } },
+        'slide-in-left': { from: { transform: 'translateX(-100%)' }, to: { transform: 'translateX(0)' } },
+        'slide-out-left': { from: { transform: 'translateX(0)' }, to: { transform: 'translateX(-100%)' } },
+      },
+      animation: {
+        'slide-in-right': 'slide-in-right 220ms cubic-bezier(0.32, 0.72, 0, 1)',
+        'slide-out-right': 'slide-out-right 200ms cubic-bezier(0.32, 0.72, 0, 1)',
+        'slide-in-left': 'slide-in-left 220ms cubic-bezier(0.32, 0.72, 0, 1)',
+        'slide-out-left': 'slide-out-left 200ms cubic-bezier(0.32, 0.72, 0, 1)',
+      },
     },
   },
-  plugins: [typography],
+  plugins: [typography, animate],
 };
 
 export default config;
