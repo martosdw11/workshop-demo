@@ -1,0 +1,54 @@
+# Development stack — TDD §11.1 Opsi B.
+# HANYA dua service: app + db. Tanpa Redis, tanpa object storage, tanpa worker,
+# tanpa PgBouncer, tanpa load balancer.
+#
+# Jalankan dari root project:
+#   docker compose -f docker/docker-compose.yml up -d db      # database saja (dev lokal)
+#   docker compose -f docker/docker-compose.yml up -d         # app + db
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: lsai-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: learning_study_ai
+    ports:
+      - '5432:5432'
+    volumes:
+      - lsai-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U app -d learning_study_ai']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: lsai-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      APP_BASE_URL: http://localhost:3000
+      DATABASE_URL: postgres://app:app@db:5432/learning_study_ai
+      DATABASE_POOL_MAX: '10'
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET wajib diisi}
+      # Volume media di-mount persisten — filesystem container bersifat ephemeral
+      STORAGE_DRIVER: local
+      LOCAL_STORAGE_DIR: /app/storage/uploads
+      MEDIA_PUBLIC_HOST: http://localhost:3000
+    ports:
+      - '3000:3000'
+    volumes:
+      - lsai-media:/app/storage/uploads
+
+volumes:
+  lsai-db-data:
+  lsai-media:

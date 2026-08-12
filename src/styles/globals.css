@@ -1,0 +1,139 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Design token "Adaptive Scholastic Narrative".
+ * Sumber: doc/stitch_learning_study_ai_platform/adaptive_scholastic_narrative/DESIGN.md
+ *
+ * Nilai disimpan sebagai channel RGB (bukan hex) supaya Tailwind bisa memakai
+ * modifier opacity, mis. `bg-error/80` untuk segmen Stalled pada pipeline chart.
+ * Ini SATU-SATUNYA file yang boleh memuat nilai warna literal — komponen wajib
+ * memakai token (ditegakkan ESLint rule `no-restricted-syntax` di eslint.config.mjs).
+ */
+@layer base {
+  :root {
+    /* Surface & background */
+    --color-surface: 248 249 255; /* #f8f9ff */
+    --color-surface-dim: 203 219 245; /* #cbdbf5 */
+    --color-surface-bright: 248 249 255; /* #f8f9ff */
+    --color-surface-container-lowest: 255 255 255; /* #ffffff */
+    --color-surface-container-low: 239 244 255; /* #eff4ff */
+    --color-surface-container: 229 238 255; /* #e5eeff */
+    --color-surface-container-high: 220 233 255; /* #dce9ff */
+    --color-surface-container-highest: 211 228 254; /* #d3e4fe */
+    --color-surface-variant: 211 228 254; /* #d3e4fe */
+    --color-surface-tint: 77 68 227; /* #4d44e3 */
+    --color-background: 248 249 255; /* #f8f9ff */
+    --color-on-background: 11 28 48; /* #0b1c30 */
+
+    /* Teks & outline */
+    --color-on-surface: 11 28 48; /* #0b1c30 */
+    --color-on-surface-variant: 70 69 85; /* #464555 */
+    --color-inverse-surface: 33 49 69; /* #213145 */
+    --color-inverse-on-surface: 234 241 255; /* #eaf1ff */
+    --color-outline: 119 117 135; /* #777587 */
+    --color-outline-variant: 199 196 216; /* #c7c4d8 */
+
+    /* Primary — aksi utama, state aktif, nav, kategori "Jawaban" */
+    --color-primary: 53 37 205; /* #3525cd */
+    --color-on-primary: 255 255 255; /* #ffffff */
+    --color-primary-container: 79 70 229; /* #4f46e5 */
+    --color-on-primary-container: 218 215 255; /* #dad7ff */
+    --color-inverse-primary: 195 192 255; /* #c3c0ff */
+    --color-primary-fixed: 226 223 255; /* #e2dfff */
+    --color-primary-fixed-dim: 195 192 255; /* #c3c0ff */
+    --color-on-primary-fixed: 15 0 105; /* #0f0069 */
+    --color-on-primary-fixed-variant: 51 35 204; /* #3323cc */
+
+    /* Secondary — status In Progress */
+    --color-secondary: 0 101 145; /* #006591 */
+    --color-on-secondary: 255 255 255; /* #ffffff */
+    --color-secondary-container: 57 184 253; /* #39b8fd */
+    --color-on-secondary-container: 0 70 102; /* #004666 */
+    --color-secondary-fixed: 201 230 255; /* #c9e6ff */
+    --color-secondary-fixed-dim: 137 206 255; /* #89ceff */
+    --color-on-secondary-fixed: 0 30 47; /* #001e2f */
+    --color-on-secondary-fixed-variant: 0 76 110; /* #004c6e */
+
+    /* Tertiary — poin & achievement */
+    --color-tertiary: 104 64 0; /* #684000 */
+    --color-on-tertiary: 255 255 255; /* #ffffff */
+    --color-tertiary-container: 136 85 0; /* #885500 */
+    --color-on-tertiary-container: 255 212 164; /* #ffd4a4 */
+    --color-tertiary-fixed: 255 221 184; /* #ffddb8 */
+    --color-tertiary-fixed-dim: 255 185 95; /* #ffb95f */
+    --color-on-tertiary-fixed: 42 23 0; /* #2a1700 */
+    --color-on-tertiary-fixed-variant: 101 62 0; /* #653e00 */
+
+    /* Error — Issue, drop-off, bottleneck */
+    --color-error: 186 26 26; /* #ba1a1a */
+    --color-on-error: 255 255 255; /* #ffffff */
+    --color-error-container: 255 218 214; /* #ffdad6 */
+    --color-on-error-container: 147 0 10; /* #93000a */
+  }
+
+  /*
+   * Dark mode (PRD §7.7): pergeseran slate/zinc, BUKAN hitam murni, untuk
+   * mengurangi kelelahan mata pada sesi belajar panjang. Nama token tidak
+   * berubah — hanya nilainya, sehingga komponen tidak perlu tahu tema aktif.
+   * Kalibrasi kontras final dikerjakan di EPIC 8 Story 8.2.
+   */
+  .dark {
+    --color-surface: 15 23 42; /* slate-900 */
+    --color-surface-dim: 2 6 23; /* slate-950 */
+    --color-surface-bright: 30 41 59; /* slate-800 */
+    --color-surface-container-lowest: 2 6 23; /* slate-950 */
+    --color-surface-container-low: 15 23 42; /* slate-900 */
+    --color-surface-container: 30 41 59; /* slate-800 */
+    --color-surface-container-high: 51 65 85; /* slate-700 */
+    --color-surface-container-highest: 71 85 105; /* slate-600 */
+    --color-surface-variant: 51 65 85; /* slate-700 */
+    --color-background: 2 6 23; /* slate-950 */
+    --color-on-background: 226 232 240; /* slate-200 */
+
+    --color-on-surface: 226 232 240; /* slate-200 */
+    --color-on-surface-variant: 148 163 184; /* slate-400 */
+    --color-inverse-surface: 226 232 240; /* slate-200 */
+    --color-inverse-on-surface: 15 23 42; /* slate-900 */
+    --color-outline: 100 116 139; /* slate-500 */
+    --color-outline-variant: 51 65 85; /* slate-700 */
+
+    --color-primary: 195 192 255; /* #c3c0ff — inverse-primary */
+    --color-on-primary: 15 0 105; /* #0f0069 */
+    --color-primary-container: 51 35 204; /* #3323cc */
+    --color-on-primary-container: 226 223 255; /* #e2dfff */
+
+    --color-secondary: 137 206 255; /* #89ceff */
+    --color-on-secondary: 0 30 47; /* #001e2f */
+    --color-secondary-container: 0 76 110; /* #004c6e */
+    --color-on-secondary-container: 201 230 255; /* #c9e6ff */
+
+    --color-tertiary: 255 185 95; /* #ffb95f */
+    --color-on-tertiary: 42 23 0; /* #2a1700 */
+    --color-tertiary-container: 101 62 0; /* #653e00 */
+    --color-on-tertiary-container: 255 221 184; /* #ffddb8 */
+
+    --color-error: 255 180 171; /* error dark tone */
+    --color-on-error: 105 0 5;
+    --color-error-container: 147 0 10; /* #93000a */
+    --color-on-error-container: 255 218 214; /* #ffdad6 */
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background font-sans text-on-surface antialiased;
+  }
+
+  /*
+   * Aksesibilitas §7.7 PRD: focus ring 2px primary dengan offset, wajib terlihat
+   * di seluruh elemen interaktif. Dilarang menimpanya dengan `outline: none`
+   * tanpa pengganti.
+   */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-primary;
+  }
+}

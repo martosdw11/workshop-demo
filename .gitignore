@@ -30,8 +30,13 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files — .env.example WAJIB di-commit sebagai dokumentasi variable (TDD §10)
 .env*
+!.env.example
+
+# media storage lokal (STORAGE_DRIVER=local) — isinya data, bukan kode
+/storage/uploads/*
+!/storage/uploads/.gitkeep
 
 # vercel
 .vercel
