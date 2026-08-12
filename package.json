@@ -19,15 +19,25 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/server/db/seed.ts",
     "db:seed:bulk": "tsx src/server/db/seed-bulk.ts",
-    "db:reset": "tsx src/server/db/reset.ts"
+    "db:reset": "tsx src/server/db/reset.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",
+    "@tiptap/extension-image": "^3.30.0",
+    "@tiptap/html": "^3.30.0",
+    "@tiptap/starter-kit": "^3.30.0",
+    "@vercel/blob": "^2.8.0",
     "drizzle-orm": "^0.45.2",
     "next": "15.5.23",
+    "pino": "^10.3.1",
     "postgres": "^3.4.7",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "sanitize-html": "^2.17.5",
     "zod": "^3.24.1"
   },
   "devDependencies": {
@@ -36,6 +46,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/sanitize-html": "^2.16.1",
     "autoprefixer": "^10.4.20",
     "dotenv": "^16.4.7",
     "drizzle-kit": "^0.31.6",
@@ -47,6 +58,7 @@
     "prettier-plugin-tailwindcss": "^0.6.11",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.20.6",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }

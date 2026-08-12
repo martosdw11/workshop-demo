@@ -1,0 +1,452 @@
+###############################################################################
+# Learning Study AI — Uji manual seluruh alur inti
+#
+# Belum ada UI (epic ini backend saja), jadi file ini adalah cara menjalankan
+# alur lengkap: register → login → (admin) create event + materi + publish →
+# (peserta) katalog → enroll → submit respons → complete → finish → view result.
+#
+# Cara pakai:
+#   VS Code  : ekstensi "REST Client" (humao.rest-client) → klik "Send Request".
+#   JetBrains: dukungan .http bawaan.
+#
+# Cookie sesi ditangani otomatis oleh REST Client (Set-Cookie disimpan per host).
+# Jalankan BERURUTAN dari atas — beberapa request memakai variabel dari respons
+# request sebelumnya.
+#
+# Prasyarat: `npm run db:migrate && npm run db:seed && npm run dev`
+###############################################################################
+
+@host = http://localhost:3000/api/v1
+@adminEmail = admin@learningstudy.ai
+@adminPassword = Admin12345
+
+### 0. Health check — dikecualikan dari auth & logging (TDD §11.1)
+GET {{host}}/health
+
+
+###############################################################################
+# 1. AUTH (TDD §3.2)
+###############################################################################
+
+### 1.1 Register — validasi gagal → 422 VALIDATION_ERROR + details.fields
+POST {{host}}/auth/register
+Content-Type: application/json
+
+{ "name": "A", "email": "bukan-email", "phone": "08", "password": "lemah" }
+
+### 1.2 Register peserta — 201. Field `role` DIABAIKAN (selalu participant, §5.3)
+# @name register
+POST {{host}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "Andi Pratama",
+  "email": "andi.manual@example.com",
+  "phone": "0812 3456 7001",
+  "password": "rahasia123",
+  "role": "admin"
+}
+
+### 1.3 Register email yang sama → 409 EMAIL_TAKEN (dari UNIQUE, bukan SELECT)
+POST {{host}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "Andi Kembar",
+  "email": "ANDI.MANUAL@example.com",
+  "phone": "081234567002",
+  "password": "rahasia123"
+}
+
+### 1.4 Login salah password → 401 INVALID_CREDENTIALS
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{ "email": "andi.manual@example.com", "password": "salahsekali9" }
+
+### 1.5 Login admin (Remember me 30 hari)
+# @name loginAdmin
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{ "email": "{{adminEmail}}", "password": "{{adminPassword}}", "rememberMe": true }
+
+### 1.6 Siapa saya
+GET {{host}}/auth/me
+
+
+###############################################################################
+# 2. ADMIN — EVENT BUILDER (TDD §3.4, EPIC 3)
+###############################################################################
+
+### 2.1 Buat event → 201, selalu lahir sebagai draft
+# @name createEvent
+POST {{host}}/admin/events
+Content-Type: application/json
+
+{
+  "title": "Advanced Machine Learning (Manual Test)",
+  "description": "Event untuk menguji alur backend tanpa UI.",
+  "startAt": "2026-08-13T01:00:00.000Z",
+  "endAt": "2026-09-13T10:00:00.000Z",
+  "quota": 150
+}
+
+@eventId = {{createEvent.response.body.data.event.id}}
+
+### 2.2 Publish tanpa materi → 422 EVENT_HAS_NO_MATERIAL
+POST {{host}}/admin/events/{{eventId}}/publish
+Content-Type: application/json
+
+{ "status": "published" }
+
+### 2.3 Tambah Modul 1
+# @name modul1
+POST {{host}}/admin/events/{{eventId}}/materials
+Content-Type: application/json
+
+{
+  "parentId": null,
+  "title": "Modul 1 — Fondasi Machine Learning",
+  "points": 20,
+  "contentJson": {
+    "type": "doc",
+    "content": [
+      { "type": "heading", "attrs": { "level": 2 }, "content": [{ "type": "text", "text": "Pengantar" }] },
+      { "type": "paragraph", "content": [{ "type": "text", "text": "Materi pembuka." }] }
+    ]
+  }
+}
+
+@modul1Id = {{modul1.response.body.data.material.id}}
+
+### 2.4 Tambah Lesson 1.1 (sub-materi dari Modul 1)
+# @name lesson11
+POST {{host}}/admin/events/{{eventId}}/materials
+Content-Type: application/json
+
+{
+  "parentId": {{modul1Id}},
+  "title": "Lesson 1.1 — Supervised vs Unsupervised",
+  "points": 50,
+  "contentJson": {
+    "type": "doc",
+    "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Apa perbedaan keduanya?" }] }]
+  }
+}
+
+@lesson11Id = {{lesson11.response.body.data.material.id}}
+
+### 2.5 Sub-materi dari sub-materi → 422 MAX_DEPTH_EXCEEDED (batas 2 level, §2.4)
+POST {{host}}/admin/events/{{eventId}}/materials
+Content-Type: application/json
+
+{ "parentId": {{lesson11Id}}, "title": "Sub dari sub", "points": 10 }
+
+### 2.6 Poin negatif → 422 VALIDATION_ERROR (Zod) — CHECK points >= 0 sebagai lapis terakhir
+POST {{host}}/admin/events/{{eventId}}/materials
+Content-Type: application/json
+
+{ "parentId": null, "title": "Poin minus", "points": -5 }
+
+### 2.7 Tambah Modul 2
+# @name modul2
+POST {{host}}/admin/events/{{eventId}}/materials
+Content-Type: application/json
+
+{ "parentId": null, "title": "Modul 2 — Model & Evaluasi", "points": 30, "contentJson": null }
+
+@modul2Id = {{modul2.response.body.data.material.id}}
+
+### 2.8 Uji sanitasi XSS server-side (§8.4) — perhatikan contentHtml pada respons
+POST {{host}}/admin/events/{{eventId}}/materials
+Content-Type: application/json
+
+{
+  "parentId": null,
+  "title": "Materi uji sanitasi",
+  "points": 0,
+  "contentJson": {
+    "type": "doc",
+    "content": [
+      { "type": "paragraph", "content": [
+        { "type": "text", "marks": [{ "type": "link", "attrs": { "href": "javascript:alert(1)" } }], "text": "klik saya" }
+      ]},
+      { "type": "image", "attrs": { "src": "https://pelacak.jahat.example/beacon.png" } },
+      { "type": "blockquote", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "node terlarang" }] }] }
+    ]
+  }
+}
+
+### 2.9 Lihat tree — sequence_index harus 1,2,3,… hasil flatten
+GET {{host}}/admin/events/{{eventId}}/materials
+
+### 2.10 Reorder seluruh tree (Modul 2 naik ke atas)
+PATCH {{host}}/admin/events/{{eventId}}/materials/reorder
+Content-Type: application/json
+
+{
+  "items": [
+    { "id": {{modul2Id}}, "parentId": null, "orderIndex": 0 },
+    { "id": {{modul1Id}}, "parentId": null, "orderIndex": 1 },
+    { "id": {{lesson11Id}}, "parentId": {{modul1Id}}, "orderIndex": 0 }
+  ]
+}
+
+### 2.11 Reorder dengan daftar tidak lengkap → 409 STALE_TREE
+PATCH {{host}}/admin/events/{{eventId}}/materials/reorder
+Content-Type: application/json
+
+{ "items": [{ "id": {{modul1Id}}, "parentId": null, "orderIndex": 0 }] }
+
+### 2.12 Kembalikan urutan semula
+PATCH {{host}}/admin/events/{{eventId}}/materials/reorder
+Content-Type: application/json
+
+{
+  "items": [
+    { "id": {{modul1Id}}, "parentId": null, "orderIndex": 0 },
+    { "id": {{lesson11Id}}, "parentId": {{modul1Id}}, "orderIndex": 0 },
+    { "id": {{modul2Id}}, "parentId": null, "orderIndex": 1 }
+  ]
+}
+
+### 2.13 Publish → 200
+POST {{host}}/admin/events/{{eventId}}/publish
+Content-Type: application/json
+
+{ "status": "published" }
+
+### 2.14 Ubah startAt event published → 403 EVENT_PUBLISHED_IMMUTABLE_FIELD (A-B05)
+PATCH {{host}}/admin/events/{{eventId}}
+Content-Type: application/json
+
+{ "startAt": "2026-08-20T01:00:00.000Z" }
+
+### 2.15 Ubah judul → 200 (boleh kapan saja)
+PATCH {{host}}/admin/events/{{eventId}}
+Content-Type: application/json
+
+{ "title": "Advanced Machine Learning (Manual Test, revisi)" }
+
+
+###############################################################################
+# 3. PESERTA — KATALOG & JOIN (TDD §3.3, §4.2)
+###############################################################################
+
+### 3.1 Login sebagai peserta
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{ "email": "andi.manual@example.com", "password": "rahasia123" }
+
+### 3.2 Katalog — semua
+GET {{host}}/events?status=all&limit=12
+
+### 3.3 Katalog — filter & pencarian
+GET {{host}}/events?status=upcoming&q=Machine&limit=12
+
+### 3.4 Detail event (+ myEnrollment)
+GET {{host}}/events/{{eventId}}
+
+### 3.5 Join event → 201 {enrollment, firstMaterialId, redirectTo}
+# @name enroll
+POST {{host}}/events/{{eventId}}/enroll
+
+@enrollmentId = {{enroll.response.body.data.enrollment.id}}
+
+### 3.6 Join lagi → 409 ALREADY_ENROLLED + details.resumeUrl (§3.5)
+POST {{host}}/events/{{eventId}}/enroll
+
+
+###############################################################################
+# 4. LEARNING PLAYER & SCORING (TDD §3.3, §4.3)
+###############################################################################
+
+### 4.1 Learning path — state per materi: completed / active / locked
+GET {{host}}/enrollments/{{enrollmentId}}
+
+### 4.2 Materi pertama (terbuka)
+GET {{host}}/materials/{{modul1Id}}
+
+### 4.3 Materi yang belum tercapai → 403 MATERIAL_LOCKED
+GET {{host}}/materials/{{modul2Id}}
+
+### 4.4 Kirim komentar — TIDAK menghasilkan poin
+POST {{host}}/materials/{{modul1Id}}/responses
+Content-Type: application/json
+
+{ "type": "comment", "content": "Penjelasannya membantu, terima kasih." }
+
+### 4.5 Kirim issue — issueStatus otomatis 'open'
+POST {{host}}/materials/{{modul1Id}}/responses
+Content-Type: application/json
+
+{ "type": "issue", "content": "Gambar di bagian kedua tidak muncul." }
+
+### 4.6 Complete TANPA answer → 0 poin, reason NO_ANSWER_RESPONSE (all-or-nothing)
+POST {{host}}/materials/{{modul1Id}}/complete
+
+### 4.7 Kirim answer di Lesson 1.1 → materialWillEarnPoints: true (§3.5)
+POST {{host}}/materials/{{lesson11Id}}/responses
+Content-Type: application/json
+
+{ "type": "answer", "content": "Menurut saya perbedaan utamanya ada pada ketersediaan label data." }
+
+### 4.8 Konten kosong → 422 VALIDATION_ERROR
+POST {{host}}/materials/{{lesson11Id}}/responses
+Content-Type: application/json
+
+{ "type": "answer", "content": "     " }
+
+### 4.9 Timeline respons (cursor 20 item)
+GET {{host}}/materials/{{lesson11Id}}/responses?type=answer&limit=20
+
+### 4.10 Complete DENGAN answer → poin penuh, reason ANSWER_PRESENT
+POST {{host}}/materials/{{lesson11Id}}/complete
+
+### 4.11 Complete ulang → 200 reason ALREADY_COMPLETED, poin TIDAK dobel (§4.4)
+POST {{host}}/materials/{{lesson11Id}}/complete
+
+### 4.12 Finish sebelum materi terakhir → 403 NOT_AT_LAST_MATERIAL
+POST {{host}}/enrollments/{{enrollmentId}}/finish
+
+### 4.13 Selesaikan materi terakhir
+POST {{host}}/materials/{{modul2Id}}/complete
+
+### 4.14 Finish → 200 {enrollment, summary, readOnly, redirectTo} (§3.5)
+POST {{host}}/enrollments/{{enrollmentId}}/finish
+
+### 4.15 Finish ke-2 → payload SAMA, completedAt tidak berubah (idempoten)
+POST {{host}}/enrollments/{{enrollmentId}}/finish
+
+### 4.16 Kirim respons setelah finish → 403 ENROLLMENT_COMPLETED (read-only §4.5)
+POST {{host}}/materials/{{lesson11Id}}/responses
+Content-Type: application/json
+
+{ "type": "comment", "content": "Masih boleh menulis?" }
+
+### 4.17 Timeline TETAP terbaca setelah finish
+GET {{host}}/materials/{{lesson11Id}}/responses
+
+### 4.18 View Results — materi jadi read-only
+GET {{host}}/materials/{{lesson11Id}}
+
+### 4.19 Dashboard peserta — 4 KPI + continueLearning + achievements
+GET {{host}}/me/dashboard
+
+
+###############################################################################
+# 5. ADMIN — MONITORING (TDD §3.4, §7)
+###############################################################################
+
+### 5.0 Kembali login sebagai admin
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{ "email": "{{adminEmail}}", "password": "{{adminPassword}}" }
+
+### 5.1 KPI
+GET {{host}}/admin/dashboard/kpi?period=30d
+
+### 5.2 Event Pipeline (Completed / In Progress / Stalled)
+GET {{host}}/admin/dashboard/pipeline?period=30d
+
+### 5.3 Drill-down per materi ("Materi 3.2 — 42 peserta")
+GET {{host}}/admin/events/{{eventId}}/pipeline/materials
+
+### 5.4 Recent Activity Feed
+GET {{host}}/admin/activity?limit=20
+
+### 5.5 Matriks peserta × materi (25 peserta per halaman)
+GET {{host}}/admin/events/{{eventId}}/participants?limit=25
+
+### 5.6 Respons event — filter tipe & issue terbuka
+# @name issues
+GET {{host}}/admin/events/{{eventId}}/responses?type=issue&issueStatus=open&limit=25
+
+@responseId = {{issues.response.body.data.items.0.id}}
+
+### 5.7 Tandai issue resolved
+PATCH {{host}}/admin/responses/{{responseId}}/issue-status
+Content-Type: application/json
+
+{ "issueStatus": "resolved" }
+
+
+###############################################################################
+# 6. ADMIN — PESERTA & USER ACCESS (TDD §3.4, §5.3)
+###############################################################################
+
+### 6.1 Participant List
+# @name people
+GET {{host}}/admin/participants?limit=10
+
+@userId = {{people.response.body.data.items.0.user.id}}
+
+### 6.2 Detail peserta
+GET {{host}}/admin/participants/{{userId}}
+
+### 6.3 Drill-down peserta × event (poin per materi + seluruh responsnya)
+GET {{host}}/admin/participants/{{userId}}/events/{{eventId}}
+
+### 6.4 Ubah peran diri sendiri → 403 CANNOT_DEMOTE_SELF
+#     (ganti :id dengan id admin yang sedang login — lihat 1.6)
+PATCH {{host}}/admin/users/1/role
+Content-Type: application/json
+
+{ "role": "participant" }
+
+### 6.5 Naikkan peserta menjadi admin
+PATCH {{host}}/admin/users/{{userId}}/role
+Content-Type: application/json
+
+{ "role": "admin" }
+
+### 6.6 Turunkan kembali
+PATCH {{host}}/admin/users/{{userId}}/role
+Content-Type: application/json
+
+{ "role": "participant" }
+
+### 6.7 Nonaktifkan akun → sesi aktifnya dicabut pada transaksi yang sama (§5.3)
+PATCH {{host}}/admin/users/{{userId}}/status
+Content-Type: application/json
+
+{ "status": "inactive" }
+
+### 6.8 Aktifkan lagi
+PATCH {{host}}/admin/users/{{userId}}/status
+Content-Type: application/json
+
+{ "status": "active" }
+
+### 6.9 Reset password — temporary password TAMPIL SEKALI, tanpa email (A-09)
+POST {{host}}/admin/users/{{userId}}/reset-password
+
+
+###############################################################################
+# 7. GUARD PENGHAPUSAN & RBAC
+###############################################################################
+
+### 7.1 Hapus materi yang sudah dikerjakan → 409 MATERIAL_HAS_PROGRESS
+DELETE {{host}}/admin/materials/{{lesson11Id}}
+
+### 7.2 Unpublish event berpeserta → 409 CANNOT_UNPUBLISH_WITH_ENROLLMENTS
+POST {{host}}/admin/events/{{eventId}}/publish
+Content-Type: application/json
+
+{ "status": "draft" }
+
+### 7.3 Hapus event berpeserta → 409 EVENT_HAS_ENROLLMENTS
+DELETE {{host}}/admin/events/{{eventId}}
+
+### 7.4 Peserta mengakses /admin → 403 FORBIDDEN
+#     (jalankan 3.1 dulu agar sesi berganti ke peserta)
+GET {{host}}/admin/events
+
+### 7.5 Tanpa sesi → 401 UNAUTHENTICATED
+POST {{host}}/auth/logout
+
+###
+GET {{host}}/auth/me
