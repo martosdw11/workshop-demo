@@ -1,4 +1,5 @@
 import { MaterialIcon } from '@/components/shared/MaterialIcon';
+import { ThemeToggle } from '@/components/shared/ThemeToggle';
 
 /**
  * AuthSplitLayout — TDD §6.3, acuan `login_learning_study_ai/`.
@@ -42,7 +43,11 @@ export function AuthSplitLayout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex flex-1 flex-col justify-center bg-surface px-container-mobile py-12 sm:px-6 lg:px-20 xl:px-32">
+      <main className="relative flex flex-1 flex-col justify-center bg-surface px-container-mobile py-12 sm:px-6 lg:px-20 xl:px-32">
+        {/* Pemilih tema ikut hadir sebelum login: preferensi tersimpan di
+            localStorage, jadi ia tidak butuh sesi untuk bekerja. */}
+        <ThemeToggle className="absolute right-4 top-4" />
+
         <div className="mb-8 flex items-center justify-center gap-2 lg:hidden">
           <MaterialIcon name="school" filled className="text-[28px] text-primary" />
           <span className="text-title-lg text-primary">Learning Study AI</span>

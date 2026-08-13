@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { api } from '@/lib/api-client';
 import { cn, initialsOf } from '@/lib/utils';
 import { MaterialIcon } from './MaterialIcon';
+import { ThemeToggle } from './ThemeToggle';
 
 /**
  * AdminSideNav — TDD §6.2, mengikuti `admin_dashboard_monitoring` (w-64).
@@ -112,23 +113,36 @@ export function AdminSideNav({ user }: AdminSideNavProps) {
     </div>
   );
 
-  const logoutButton = (
-    <Button variant="ghost" className="mt-2 w-full justify-start" onClick={handleLogout} disabled={loggingOut}>
-      <MaterialIcon name="logout" />
-      {loggingOut ? 'Keluar…' : 'Keluar'}
-    </Button>
+  const footerActions = (
+    <div className="mt-2 flex items-center gap-2">
+      <Button
+        variant="ghost"
+        className="min-w-0 flex-1 justify-start"
+        onClick={handleLogout}
+        disabled={loggingOut}
+      >
+        <MaterialIcon name="logout" />
+        {loggingOut ? 'Keluar…' : 'Keluar'}
+      </Button>
+      <ThemeToggle />
+    </div>
   );
 
   return (
     <>
-      {/* Desktop: sidebar tetap (portal admin diutamakan desktop, §2 PRD). */}
+      {/* Desktop: sidebar tetap (portal admin diutamakan desktop, §2 PRD).
+          `h-screen` + `sticky` WAJIB di sini: tanpa tinggi eksplisit, nav ikut
+          ter-stretch setinggi konten halaman (tabel bisa ribuan piksel), sehingga
+          `mt-auto` pada blok Settings/Help mendorongnya ke DASAR HALAMAN — bukan
+          ke dasar layar. `overflow-y-auto` menjaga nav tetap bisa digulir sendiri
+          pada layar pendek. */}
       <nav
         aria-label="Navigasi admin"
-        className="hidden w-64 shrink-0 flex-col overflow-y-auto border-r border-outline-variant bg-surface-container-lowest p-6 md:flex"
+        className="hidden w-64 shrink-0 flex-col overflow-y-auto border-r border-outline-variant bg-surface-container-lowest p-6 md:sticky md:top-0 md:flex md:h-screen"
       >
         {header}
         <NavList />
-        {logoutButton}
+        {footerActions}
       </nav>
 
       {/* Mobile: sheet kiri, dipicu tombol menu di header halaman. */}
@@ -144,7 +158,7 @@ export function AdminSideNav({ user }: AdminSideNavProps) {
               <SheetTitle>Admin Portal</SheetTitle>
             </SheetHeader>
             <NavList onNavigate={() => setOpen(false)} />
-            {logoutButton}
+            {footerActions}
           </SheetContent>
         </Sheet>
         <span className="text-title-md text-primary">Learning Study AI</span>

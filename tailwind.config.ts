@@ -106,7 +106,13 @@ const config: Config = {
       24: '96px',
       32: '128px',
       40: '160px',
+      44: '176px',
+      48: '192px',
+      56: '224px',
       64: '256px', // lebar AdminSideNav (w-64)
+      72: '288px',
+      80: '320px', // lebar LearningPathSidebar (w-80)
+      96: '384px',
       // Alias semantik dari DESIGN.md
       'stack-sm': '0.5rem', // 8px  — jarak antar elemen dalam kartu
       'stack-md': '1rem', // 16px — padding internal komponen

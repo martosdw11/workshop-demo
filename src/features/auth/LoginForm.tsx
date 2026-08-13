@@ -14,7 +14,6 @@ import { api, isApiError } from '@/lib/api-client';
 import { messageForError } from '@/lib/error-messages';
 import { loginSchema, type LoginInput } from '@/lib/validation/auth';
 import { FormField } from './FormField';
-import { SsoButtonsDisabled } from './SsoButtonsDisabled';
 
 /**
  * LoginForm — TDD §6.3, acuan `login_learning_study_ai/`.
@@ -139,17 +138,6 @@ export function LoginForm() {
         <Button type="submit" className="w-full" disabled={isSubmitting}>
           {isSubmitting ? 'Memproses…' : 'Sign in'}
         </Button>
-
-        <div className="relative py-2">
-          <div aria-hidden className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-outline-variant" />
-          </div>
-          <div className="relative flex justify-center">
-            <span className="bg-surface px-2 text-body-sm text-outline">Or continue with</span>
-          </div>
-        </div>
-
-        <SsoButtonsDisabled />
       </form>
 
       <p className="mt-10 text-center text-body-sm text-on-surface-variant">

@@ -17,6 +17,7 @@ import { api } from '@/lib/api-client';
 import { formatNumber } from '@/lib/format';
 import { cn, initialsOf } from '@/lib/utils';
 import { MaterialIcon } from './MaterialIcon';
+import { ThemeToggle } from './ThemeToggle';
 
 /**
  * TopNavBar — TDD §6.2, mengikuti `header` fixed h-16 pada seluruh mockup peserta.
@@ -104,6 +105,8 @@ export function TopNavBar({ user, totalPoints }: TopNavBarProps) {
             <span className="hidden sm:inline">Total Points:&nbsp;</span>
             {formatNumber(totalPoints)}
           </span>
+
+          <ThemeToggle />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

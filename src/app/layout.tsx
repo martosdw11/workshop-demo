@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import localFont from 'next/font/local';
 
+import { THEME_INIT_SCRIPT } from '@/lib/theme';
 import { Providers } from './providers';
 
 import '@/styles/globals.css';
@@ -43,7 +44,22 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="id" className={`${inter.variable} ${materialSymbols.variable}`}>
+    /*
+     * `suppressHydrationWarning` dibatasi pada <html> saja: skrip di bawah
+     * sengaja mengubah `class` elemen ini sebelum React hidrasi, jadi
+     * ketidakcocokan di situ memang diharapkan — bukan bug yang disembunyikan.
+     * Atributnya tidak menurun ke anak, sehingga isi halaman tetap diperiksa.
+     */
+    <html
+      lang="id"
+      className={`${inter.variable} ${materialSymbols.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        {/* Harus di <head> dan sinkron: menundanya ke akhir <body> berarti satu
+            frame dengan tema salah (FOUC) bagi pengguna dark mode. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body>
         <Providers>{children}</Providers>
       </body>
