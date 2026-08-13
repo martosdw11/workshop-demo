@@ -1,18 +1,13 @@
-# CI/CD — GitHub Actions → Vercel
+# CI — GitHub Actions (deploy ditangani Vercel Git Integration)
 #
 # Alur:
 #   - Setiap push/PR  : lint + typecheck + unit test + integration test (Postgres 16 service)
-#   - PR              : deploy Preview ke Vercel (setelah CI hijau)
-#   - Push ke main    : deploy Production ke Vercel (setelah CI hijau)
+#   - Deploy          : otomatis oleh Vercel Git Integration pada project
+#                       `workshop-demo` (Preview untuk PR, Production untuk main).
+#                       Tidak ada langkah deploy di sini — hindari deploy dobel.
 #
-# Secrets yang wajib di-set di GitHub (Settings → Secrets and variables → Actions):
-#   VERCEL_TOKEN      — token dari https://vercel.com/account/settings/tokens
-#   VERCEL_ORG_ID     — dari .vercel/project.json setelah `vercel link`
-#   VERCEL_PROJECT_ID — dari .vercel/project.json setelah `vercel link`
-#
-# Env build/runtime production (DATABASE_URL, SESSION_SECRET, dst.) TIDAK disimpan
-# di GitHub — build berjalan di Vercel dan membaca Environment Variables project
-# langsung di sana (semuanya bertipe Sensitive sehingga tak bisa di-pull keluar).
+# Env build/runtime production (DATABASE_URL, SESSION_SECRET, dst.) dikelola di
+# Environment Variables project Vercel (team policy memaksa tipe Sensitive).
 
 name: CI/CD
 
@@ -80,47 +75,3 @@ jobs:
 
       - name: Integration tests
         run: npm run test:integration
-
-  deploy-preview:
-    name: Deploy Preview (Vercel)
-    needs: ci
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    environment:
-      name: preview
-    env:
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      # Build berjalan DI VERCEL (bukan di runner) karena env vars project
-      # ditandai Sensitive — nilainya tidak bisa di-pull ke luar Vercel.
-      - name: Deploy preview (build di Vercel)
-        run: npx vercel@latest deploy --token=${{ secrets.VERCEL_TOKEN }}
-
-  deploy-production:
-    name: Deploy Production (Vercel)
-    needs: ci
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    environment:
-      name: production
-    env:
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      # Build berjalan DI VERCEL (bukan di runner) karena env vars project
-      # ditandai Sensitive — nilainya tidak bisa di-pull ke luar Vercel.
-      - name: Deploy production (build di Vercel)
-        run: npx vercel@latest deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
