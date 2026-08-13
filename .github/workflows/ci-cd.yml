@@ -11,7 +11,8 @@
 #   VERCEL_PROJECT_ID — dari .vercel/project.json setelah `vercel link`
 #
 # Env build/runtime production (DATABASE_URL, SESSION_SECRET, dst.) TIDAK disimpan
-# di GitHub — `vercel pull` mengambilnya dari Environment Variables project Vercel.
+# di GitHub — build berjalan di Vercel dan membaca Environment Variables project
+# langsung di sana (semuanya bertipe Sensitive sehingga tak bisa di-pull keluar).
 
 name: CI/CD
 
@@ -97,14 +98,10 @@ jobs:
         with:
           node-version: 20
 
-      - name: Pull Vercel environment (preview)
-        run: npx vercel@latest pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Build
-        run: npx vercel@latest build --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Deploy preview
-        run: npx vercel@latest deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }}
+      # Build berjalan DI VERCEL (bukan di runner) karena env vars project
+      # ditandai Sensitive — nilainya tidak bisa di-pull ke luar Vercel.
+      - name: Deploy preview (build di Vercel)
+        run: npx vercel@latest deploy --token=${{ secrets.VERCEL_TOKEN }}
 
   deploy-production:
     name: Deploy Production (Vercel)
@@ -123,11 +120,7 @@ jobs:
         with:
           node-version: 20
 
-      - name: Pull Vercel environment (production)
-        run: npx vercel@latest pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Build
-        run: npx vercel@latest build --prod --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Deploy production
-        run: npx vercel@latest deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+      # Build berjalan DI VERCEL (bukan di runner) karena env vars project
+      # ditandai Sensitive — nilainya tidak bisa di-pull ke luar Vercel.
+      - name: Deploy production (build di Vercel)
+        run: npx vercel@latest deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
