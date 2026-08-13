@@ -1,0 +1,133 @@
+# CI/CD — GitHub Actions → Vercel
+#
+# Alur:
+#   - Setiap push/PR  : lint + typecheck + unit test + integration test (Postgres 16 service)
+#   - PR              : deploy Preview ke Vercel (setelah CI hijau)
+#   - Push ke main    : deploy Production ke Vercel (setelah CI hijau)
+#
+# Secrets yang wajib di-set di GitHub (Settings → Secrets and variables → Actions):
+#   VERCEL_TOKEN      — token dari https://vercel.com/account/settings/tokens
+#   VERCEL_ORG_ID     — dari .vercel/project.json setelah `vercel link`
+#   VERCEL_PROJECT_ID — dari .vercel/project.json setelah `vercel link`
+#
+# Env build/runtime production (DATABASE_URL, SESSION_SECRET, dst.) TIDAK disimpan
+# di GitHub — `vercel pull` mengambilnya dari Environment Variables project Vercel.
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Lint, Typecheck & Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: learning_study_ai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d learning_study_ai"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    # Nilai dummy khusus CI — startup app memvalidasi env lewat Zod (src/server/env.ts)
+    env:
+      NODE_ENV: test
+      APP_BASE_URL: http://localhost:3000
+      DATABASE_URL: postgres://app:app@localhost:5432/learning_study_ai
+      SESSION_SECRET: ci-only-session-secret-not-for-production-0001
+      STORAGE_DRIVER: local
+      LOCAL_STORAGE_DIR: ./storage/uploads
+      MEDIA_PUBLIC_HOST: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Apply database migrations
+        run: npm run db:migrate
+
+      - name: Integration tests
+        run: npm run test:integration
+
+  deploy-preview:
+    name: Deploy Preview (Vercel)
+    needs: ci
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: preview
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Pull Vercel environment (preview)
+        run: npx vercel@latest pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build
+        run: npx vercel@latest build --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy preview
+        run: npx vercel@latest deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }}
+
+  deploy-production:
+    name: Deploy Production (Vercel)
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Pull Vercel environment (production)
+        run: npx vercel@latest pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build
+        run: npx vercel@latest build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy production
+        run: npx vercel@latest deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
