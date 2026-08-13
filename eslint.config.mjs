@@ -94,6 +94,7 @@ const eslintConfig = [
       'src/server/db/seed*.ts',
       'scripts/**/*.ts',
       'drizzle.config.ts',
+      'tests/e2e/helpers/clear-rate-limits.ts',
     ],
     rules: { 'no-console': 'off' },
   },
