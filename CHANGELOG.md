@@ -14,7 +14,7 @@ catatan diambil dari entri file ini, sehingga setiap deploy production selalu
 punya versi dan riwayat perubahan yang terekam. Versi yang sedang berjalan bisa
 dicek di `GET /api/v1/health` (field `version`).
 
-## [Belum dirilis]
+## [0.3.0] — 2026-08-14
 
 ### Changed
 
