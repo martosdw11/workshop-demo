@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, lt, or, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, lt } from 'drizzle-orm';
 
 import type { AdminEventQuery, CreateEventInput, UpdateEventInput } from '@/lib/validation/event';
 
@@ -118,11 +118,12 @@ export async function createEvent(
  *
  * ASUMSI EKSPLISIT (A-B05): §3.4 menyebut `403 EVENT_PUBLISHED_IMMUTABLE_FIELD`
  * tanpa mendefinisikan field mana. Ditetapkan di sini:
- *  - `startAt` tidak dapat diubah setelah event `published` — katalog memfilter
- *    Active/Upcoming berdasarkan kolom ini (§3.3) dan peserta sudah melihatnya;
+ *  - jadwal (`startAt` dan `endAt`) tidak dapat diubah setelah event `published` —
+ *    katalog memfilter Active/Upcoming/Finished berdasarkan kolom ini (§3.3) dan
+ *    peserta sudah melihatnya;
  *  - `quota` tidak boleh diturunkan di bawah `enrolled_count`, karena itu akan
  *    membuat event "lebih dari penuh" dan menyalahi invariant §4.2.
- * Field lain (judul, deskripsi, cover, `endAt`) tetap boleh diubah kapan saja.
+ * Field lain (judul, deskripsi, cover, kuota) tetap boleh diubah kapan saja.
  */
 export async function updateEvent(
   eventId: number,
@@ -133,6 +134,9 @@ export async function updateEvent(
   if (current.status === 'published') {
     if (input.startAt !== undefined && new Date(input.startAt).getTime() !== current.startAt.getTime()) {
       throw new AppError('EVENT_PUBLISHED_IMMUTABLE_FIELD', { field: 'startAt' });
+    }
+    if (input.endAt !== undefined && new Date(input.endAt).getTime() !== current.endAt.getTime()) {
+      throw new AppError('EVENT_PUBLISHED_IMMUTABLE_FIELD', { field: 'endAt' });
     }
     if (input.quota !== undefined && input.quota !== null && input.quota < current.enrolledCount) {
       throw new AppError('EVENT_PUBLISHED_IMMUTABLE_FIELD', {
@@ -189,9 +193,12 @@ export async function deleteEvent(eventId: number): Promise<void> {
 
 /**
  * `POST /admin/events/:id/publish` — dua arah (§3.4).
- * Guard: `422 EVENT_HAS_NO_MATERIAL` saat publish tanpa materi,
- *        `409 CANNOT_UNPUBLISH_WITH_ENROLLMENTS` saat menarik kembali ke draft
- *        padahal sudah ada peserta (§4.6).
+ * Guard: `422 EVENT_HAS_NO_MATERIAL` saat publish tanpa materi.
+ *
+ * Kembali ke draft DIPERBOLEHKAN walau sudah ada peserta: enrollment yang ada
+ * tidak disentuh sama sekali (peserta lama tetap bisa melanjutkan lewat katalog
+ * mereka), event hanya berhenti menerima peserta baru dan hilang dari katalog
+ * peserta yang belum bergabung.
  */
 export async function setEventPublishStatus(
   eventId: number,
@@ -201,12 +208,6 @@ export async function setEventPublishStatus(
 
   if (status === 'published' && current.materialCount < 1) {
     throw new AppError('EVENT_HAS_NO_MATERIAL');
-  }
-
-  if (status === 'draft' && current.enrolledCount > 0) {
-    throw new AppError('CANNOT_UNPUBLISH_WITH_ENROLLMENTS', {
-      enrolledCount: current.enrolledCount,
-    });
   }
 
   const [row] = await db
@@ -224,28 +225,4 @@ export async function setEventPublishStatus(
 
   revalidateEvent(eventId);
   return toAdminEvent(row);
-}
-
-/**
- * Status katalog turunan (A-11): `finished` dihitung dari `end_at`, tapi nilai
- * enum `finished` tetap dihormati untuk penutupan manual admin.
- */
-export function catalogStatusCondition(filter: 'all' | 'active' | 'upcoming' | 'finished') {
-  const published = eq(events.status, 'published');
-  const now = sql`now()`;
-
-  switch (filter) {
-    case 'active':
-      return and(published, lt(events.startAt, now), sql`${events.endAt} >= ${now}`);
-    case 'upcoming':
-      return and(published, sql`${events.startAt} > ${now}`);
-    case 'finished':
-      return and(
-        or(published, eq(events.status, 'finished')),
-        or(sql`${events.endAt} < ${now}`, eq(events.status, 'finished')),
-      );
-    case 'all':
-    default:
-      return or(published, eq(events.status, 'finished'));
-  }
 }

@@ -65,6 +65,10 @@ export function EventInfoForm({
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [submitting, setSubmitting] = React.useState(false);
 
+  // Setelah published, jadwal terkunci (server menolak dengan
+  // EVENT_PUBLISHED_IMMUTABLE_FIELD) — field lain tetap boleh diedit.
+  const scheduleLocked = event?.status === 'published';
+
   const setField = <K extends keyof FormValues>(key: K, value: FormValues[K]) => {
     setValues((prev) => ({ ...prev, [key]: value }));
     setErrors((prev) => {
@@ -109,8 +113,14 @@ export function EventInfoForm({
 
     setSubmitting(true);
     try {
+      // Jadwal terkunci tidak ikut dikirim: nilai `datetime-local` membuang
+      // detik, jadi mengirim ulang jadwal yang "sama" bisa dianggap berubah
+      // oleh server dan ditolak EVENT_PUBLISHED_IMMUTABLE_FIELD.
+      const { startAt: _startAt, endAt: _endAt, ...withoutSchedule } = parsed.data;
+      const body = scheduleLocked ? withoutSchedule : parsed.data;
+
       const result = event
-        ? await api.patch<{ event: AdminEvent }>(`/admin/events/${event.id}`, parsed.data)
+        ? await api.patch<{ event: AdminEvent }>(`/admin/events/${event.id}`, body)
         : await api.post<{ event: AdminEvent }>('/admin/events', parsed.data);
 
       toast.success(event ? 'Info event diperbarui' : 'Event dibuat sebagai draft');
@@ -173,6 +183,8 @@ export function EventInfoForm({
             value={values.startAt}
             onChange={(changeEvent) => setField('startAt', changeEvent.target.value)}
             aria-invalid={errors.startAt ? true : undefined}
+            disabled={scheduleLocked}
+            aria-describedby={scheduleLocked ? 'schedule-locked-hint' : undefined}
           />
           {fieldError('startAt')}
         </div>
@@ -185,9 +197,21 @@ export function EventInfoForm({
             value={values.endAt}
             onChange={(changeEvent) => setField('endAt', changeEvent.target.value)}
             aria-invalid={errors.endAt ? true : undefined}
+            disabled={scheduleLocked}
+            aria-describedby={scheduleLocked ? 'schedule-locked-hint' : undefined}
           />
           {fieldError('endAt')}
         </div>
+
+        {scheduleLocked && (
+          <p
+            id="schedule-locked-hint"
+            className="text-label-sm text-on-surface-variant sm:col-span-2"
+          >
+            Jadwal tidak dapat diubah selama event berstatus Published. Data lain tetap dapat
+            diperbarui.
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">

@@ -11,9 +11,14 @@ import { decodeCursor, encodeCursor, idCursorSchema } from '../http/pagination';
 /**
  * Katalog peserta — TDD §3.3 (EPIC 4 story 4.1).
  *
- * Daftar event IDENTIK untuk semua peserta, hanya badge keikutsertaannya yang
- * personal (§1.2). Karena itu bagian yang di-cache 30 detik adalah daftar
- * event-nya saja; status keikutsertaan di-join per user di luar cache.
+ * Aturan visibilitas: yang tampil adalah event published yang MASIH BERJALAN
+ * (belum lewat `end_at`) DITAMBAH semua event yang sudah diikuti peserta —
+ * termasuk event yang sudah selesai atau yang ditarik kembali ke draft oleh
+ * admin (peserta lama tidak kehilangan akses).
+ *
+ * Konsekuensinya daftar event kini personal per user, sehingga cache 30 detik
+ * di-key per user (userId ikut menjadi argumen `cachedQuery`); detail badge
+ * keikutsertaan tetap di-join di luar cache agar selalu segar.
  */
 
 export type EventCard = {
@@ -52,32 +57,44 @@ type CatalogRow = {
 };
 
 /**
- * Filter status katalog (§3.3) — turunan dari `status` + `start_at`/`end_at`
+ * Visibilitas dasar katalog: event published yang belum berakhir, ATAU event
+ * yang sudah diikuti peserta (apa pun statusnya — draft/finished tetap tampil
+ * bagi peserta yang sudah bergabung).
+ */
+const visibleToUser = sql`(
+  (e.status = 'published' AND e.end_at >= now()) OR my.id IS NOT NULL
+)`;
+
+/**
+ * Filter status katalog (§3.3) — turunan dari jadwal `start_at`/`end_at`
  * (asumsi A-11): `finished` dihitung dari `end_at`, tapi nilai enum `finished`
- * tetap dihormati untuk penutupan manual admin.
- *
- * Berjalan di atas index #15 `(status, start_at, end_at)`.
+ * tetap dihormati untuk penutupan manual admin. Filter ini bekerja DI DALAM
+ * himpunan `visibleToUser`, jadi event finished/draft hanya muncul bagi peserta
+ * yang sudah bergabung.
  */
 function statusFilter(filter: CatalogQuery['status']) {
   switch (filter) {
     case 'active':
-      return sql`e.status = 'published' AND e.start_at <= now() AND e.end_at >= now()`;
+      return sql`e.status <> 'finished' AND e.start_at <= now() AND e.end_at >= now()`;
     case 'upcoming':
-      return sql`e.status = 'published' AND e.start_at > now()`;
+      return sql`e.status <> 'finished' AND e.start_at > now()`;
     case 'finished':
-      return sql`(e.status = 'finished' OR (e.status = 'published' AND e.end_at < now()))`;
+      return sql`(e.status = 'finished' OR e.end_at < now())`;
     case 'all':
     default:
-      return sql`e.status IN ('published', 'finished')`;
+      return sql`true`;
   }
 }
 
 /**
- * Bagian yang di-cache: daftar event tanpa satu pun data personal.
- * Tag `events:list` disegarkan setiap admin mengubah/mempublikasikan event (§7.3).
+ * Bagian yang di-cache: daftar event yang terlihat oleh SATU user (userId ikut
+ * dalam cache key lewat argumen). Tag `events:list` disegarkan setiap admin
+ * mengubah/mempublikasikan event (§7.3); join berikutnya oleh user sendiri
+ * menyegarkan tag `event:{id}` sehingga daftar ikut terkoreksi.
  */
 const fetchCatalogPage = cachedQuery(
   async (
+    userId: number,
     status: CatalogQuery['status'],
     q: string | null,
     cursorId: number | null,
@@ -87,7 +104,9 @@ const fetchCatalogPage = cachedQuery(
       SELECT e.id, e.title, e.description, e.cover_url, e.start_at, e.end_at, e.quota,
              e.status, e.enrolled_count, e.material_count, e.total_points
         FROM events e
-       WHERE ${statusFilter(status)}
+        LEFT JOIN enrollments my ON my.event_id = e.id AND my.user_id = ${userId}
+       WHERE ${visibleToUser}
+         AND ${statusFilter(status)}
          AND (${q}::text IS NULL OR e.title ILIKE '%' || ${q}::text || '%')
          AND (${cursorId}::bigint IS NULL OR e.id < ${cursorId}::bigint)
        ORDER BY e.id DESC
@@ -182,7 +201,13 @@ export async function listCatalog(
 ): Promise<{ items: EventCard[]; nextCursor: string | null }> {
   const cursor = decodeCursor(query.cursor, idCursorSchema);
 
-  const rows = await fetchCatalogPage(query.status, query.q ?? null, cursor?.id ?? null, query.limit);
+  const rows = await fetchCatalogPage(
+    userId,
+    query.status,
+    query.q ?? null,
+    cursor?.id ?? null,
+    query.limit,
+  );
 
   const hasMore = rows.length > query.limit;
   const page = hasMore ? rows.slice(0, query.limit) : rows;
@@ -231,8 +256,10 @@ export function toMyEnrollment(row: MyEnrollmentRow, materialCount: number): MyE
 
 /**
  * `GET /events/:eventId` → `{event, myEnrollment|null}` (§3.3).
- * Event `draft` TIDAK terlihat peserta sama sekali → `404 EVENT_NOT_FOUND`,
- * bukan `403`: keberadaan event yang belum dipublikasikan bukan informasi publik.
+ * Event `draft` TIDAK terlihat peserta yang belum bergabung → `404
+ * EVENT_NOT_FOUND`, bukan `403`: keberadaan event yang belum dipublikasikan
+ * bukan informasi publik. PENGECUALIAN: peserta yang sudah terlanjur join
+ * (event ditarik kembali ke draft) tetap boleh membuka event-nya.
  */
 export async function getCatalogEvent(
   userId: number,
@@ -242,7 +269,10 @@ export async function getCatalogEvent(
     SELECT e.id, e.title, e.description, e.cover_url, e.start_at, e.end_at, e.quota,
            e.status, e.enrolled_count, e.material_count, e.total_points
       FROM events e
-     WHERE e.id = ${eventId} AND e.status IN ('published', 'finished')
+     WHERE e.id = ${eventId}
+       AND (e.status IN ('published', 'finished')
+            OR EXISTS (SELECT 1 FROM enrollments my
+                        WHERE my.event_id = e.id AND my.user_id = ${userId}))
   `)) as unknown as CatalogRow[];
 
   const row = rows[0];

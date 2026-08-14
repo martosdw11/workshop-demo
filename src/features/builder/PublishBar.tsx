@@ -26,8 +26,11 @@ import type { AdminEvent } from './types';
  * PublishBar — TDD §6.7: Save Draft / Preview / Publish.
  *
  * Penanganan error yang wajib terlihat jelas (§9.4):
- *   `422 EVENT_HAS_NO_MATERIAL`            → tambahkan materi dulu
- *   `409 CANNOT_UNPUBLISH_WITH_ENROLLMENTS`→ tidak bisa kembali ke Draft
+ *   `422 EVENT_HAS_NO_MATERIAL` → tambahkan materi dulu
+ *
+ * Kembali ke Draft diperbolehkan walau event sudah berpeserta: enrollment yang
+ * ada tidak dihapus — peserta lama tetap bisa melanjutkan, event hanya berhenti
+ * menerima peserta baru.
  *
  * Peringatan §4.6 ditampilkan permanen, bukan hanya saat error: mengubah
  * `points` setelah ada peserta yang menyelesaikan materi HANYA berlaku untuk
@@ -118,8 +121,9 @@ export function PublishBar({ event }: { event: AdminEvent }) {
           <DialogHeader>
             <DialogTitle>Kembalikan event ke Draft?</DialogTitle>
             <DialogDescription>
-              Event yang berstatus Draft tidak muncul di katalog peserta. Bila sudah ada peserta yang
-              bergabung, server akan menolak permintaan ini.
+              Event Draft tidak lagi menerima peserta baru dan hilang dari katalog umum. Peserta yang
+              sudah bergabung ({event.enrolledCount} orang) tetap dipertahankan dan masih bisa
+              melanjutkan event ini.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { SessionUser } from '@/server/auth/session';
 import { closeDb } from '@/server/db/client';
+import { getCatalogEvent } from '@/server/services/catalog.service';
 import { enroll } from '@/server/services/enrollment.service';
 import {
   createEvent,
@@ -85,14 +86,29 @@ describe('siklus publish event (TDD §4.6)', () => {
     });
   });
 
-  it('unpublish event berpeserta ditolak CANNOT_UNPUBLISH_WITH_ENROLLMENTS', async () => {
+  it('unpublish event berpeserta diperbolehkan dan tidak mengurangi peserta', async () => {
     const user = await createTestUser();
     const event = await createTestEvent({ adminId: admin.id });
     await enroll(event.eventId, user.id);
 
-    await expect(setEventPublishStatus(event.eventId, 'draft')).rejects.toMatchObject({
-      code: 'CANNOT_UNPUBLISH_WITH_ENROLLMENTS',
-      status: 409,
+    const drafted = await setEventPublishStatus(event.eventId, 'draft');
+    expect(drafted.status).toBe('draft');
+    expect(drafted.enrolledCount).toBe(1);
+
+    // Peserta lama tetap bisa membuka event-nya di katalog…
+    const mine = await getCatalogEvent(user.id, event.eventId);
+    expect(mine.myEnrollment).not.toBeNull();
+    expect(mine.event.myStatus).toBe('in_progress');
+
+    // …tapi bagi peserta lain event draft tidak terlihat dan tidak bisa di-join.
+    const outsider = await createTestUser();
+    await expect(getCatalogEvent(outsider.id, event.eventId)).rejects.toMatchObject({
+      code: 'EVENT_NOT_FOUND',
+      status: 404,
+    });
+    await expect(enroll(event.eventId, outsider.id)).rejects.toMatchObject({
+      code: 'EVENT_NOT_PUBLISHED',
+      status: 403,
     });
   });
 
@@ -127,6 +143,20 @@ describe('field immutable setelah publish (A-B05)', () => {
       code: 'EVENT_PUBLISHED_IMMUTABLE_FIELD',
       status: 403,
       details: { field: 'startAt' },
+    });
+  });
+
+  it('endAt tidak bisa diubah setelah published', async () => {
+    const event = await createTestEvent({ adminId: admin.id });
+
+    await expect(
+      updateEvent(event.eventId, {
+        endAt: new Date(Date.now() + 60 * 86_400_000).toISOString(),
+      }),
+    ).rejects.toMatchObject({
+      code: 'EVENT_PUBLISHED_IMMUTABLE_FIELD',
+      status: 403,
+      details: { field: 'endAt' },
     });
   });
 

@@ -10,7 +10,8 @@ import { setEventPublishStatus } from '@/server/services/event.service';
 
 /**
  * `POST /api/v1/admin/events/:id/publish` — §3.4.
- * `422 EVENT_HAS_NO_MATERIAL` · `409 CANNOT_UNPUBLISH_WITH_ENROLLMENTS`.
+ * `422 EVENT_HAS_NO_MATERIAL`; kembali ke draft selalu diperbolehkan dan tidak
+ * menyentuh enrollment yang sudah ada.
  */
 export const dynamic = 'force-dynamic';
 
