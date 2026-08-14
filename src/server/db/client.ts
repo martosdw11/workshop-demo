@@ -33,7 +33,23 @@ const int8AsNumber = {
   parse: (value: string) => Number(value),
 };
 
+/**
+ * Deteksi pooler transaction-mode (Supabase Supavisor port 6543, atau host
+ * `pooler.supabase.com`). Di mode ini SATU koneksi fisik dipakai bergantian oleh
+ * banyak klien per transaksi, sehingga:
+ *   - prepared statements tidak aman (statement disiapkan di koneksi A, dieksekusi
+ *     di koneksi B) → `prepare: false`;
+ *   - parameter startup per-sesi (`statement_timeout`, dll.) tidak dijamin sampai
+ *     ke server → set lewat `ALTER ROLE ... SET` di sisi Supabase (lihat
+ *     doc/supabase-deploy.md), bukan dari klien.
+ */
+function usesTransactionPooler(url: string): boolean {
+  return url.includes(':6543') || url.includes('pooler.supabase.');
+}
+
 function createClient(): postgres.Sql {
+  const viaPooler = usesTransactionPooler(env.DATABASE_URL);
+
   return postgres(env.DATABASE_URL, {
     types: { bigint: int8AsNumber },
     // Kecil dan disengaja (§11.2). Turunkan ke 5 di platform serverless, dan di sana
@@ -41,13 +57,18 @@ function createClient(): postgres.Sql {
     max: env.DATABASE_POOL_MAX,
     idle_timeout: 20,
     connect_timeout: 10,
+    prepare: !viaPooler,
     // Query lambat harus gagal cepat, bukan menahan koneksi.
     // idle_in_transaction: transaksi menggantung yang memegang `FOR UPDATE` pada
     // baris event akan memblokir semua peserta yang sedang join event tersebut.
-    connection: {
-      statement_timeout: 5_000,
-      idle_in_transaction_session_timeout: 10_000,
-    },
+    ...(viaPooler
+      ? {}
+      : {
+          connection: {
+            statement_timeout: 5_000,
+            idle_in_transaction_session_timeout: 10_000,
+          },
+        }),
     // Log query hanya saat development, dan tidak pernah memuat nilai parameter.
     onnotice: env.NODE_ENV === 'development' ? undefined : () => {},
   });
