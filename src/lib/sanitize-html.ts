@@ -79,10 +79,17 @@ const extensions = [
 ];
 
 export type SanitizeOptions = {
-  /** Host media milik sendiri — `src` gambar di luar ini dibuang (§8.4). */
+  /** Host media milik sendiri — origin ini selalu diizinkan (termasuk http di dev). */
   mediaPublicHost: string;
 };
 
+/**
+ * KEBIJAKAN SEMENTARA (mode insert-URL, §8.4 dilonggarkan sadar): selama fitur
+ * upload dinonaktifkan, admin menempelkan URL gambar eksternal, jadi `src`
+ * https dari host mana pun diizinkan. `data:`, `javascript:`, dan http eksternal
+ * (mixed content) tetap ditolak. Saat kembali ke mode upload, kembalikan
+ * whitelist host di sini DAN di `img-src` CSP (next.config.ts).
+ */
 function isAllowedImageSrc(src: string, mediaPublicHost: string): boolean {
   // Media lokal disajikan Route Handler kita sendiri.
   if (src.startsWith('/api/v1/media/')) return true;
@@ -90,10 +97,9 @@ function isAllowedImageSrc(src: string, mediaPublicHost: string): boolean {
     const url = new URL(src);
     const host = new URL(mediaPublicHost);
     if (url.origin === host.origin) return true;
-    // Driver `blob` menyajikan dari domain penyedia; whitelist-nya eksplisit.
-    return url.protocol === 'https:' && url.hostname.endsWith('.public.blob.vercel-storage.com');
+    return url.protocol === 'https:';
   } catch {
-    // Bukan URL absolut dan bukan path media kita → hotlink/`data:`/`javascript:` → tolak.
+    // Bukan URL absolut dan bukan path media kita → `data:`/`javascript:` → tolak.
     return false;
   }
 }

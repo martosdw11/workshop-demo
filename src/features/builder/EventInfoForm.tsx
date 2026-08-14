@@ -12,7 +12,7 @@ import { toast } from '@/components/ui/sonner';
 import { api, isApiError } from '@/lib/api-client';
 import { messageForError } from '@/lib/error-messages';
 import { createEventSchema } from '@/lib/validation/event';
-import { CoverUploader } from './CoverUploader';
+import { CoverUrlInput } from './CoverUrlInput';
 import type { AdminEvent } from './types';
 
 /**
@@ -209,7 +209,7 @@ export function EventInfoForm({
         {fieldError('quota')}
       </div>
 
-      <CoverUploader value={values.coverUrl} onChange={(url) => setField('coverUrl', url)} />
+      <CoverUrlInput value={values.coverUrl} onChange={(url) => setField('coverUrl', url)} />
       {fieldError('coverUrl')}
 
       <Button type="submit" disabled={submitting}>

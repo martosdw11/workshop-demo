@@ -4,14 +4,11 @@ import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import * as React from 'react';
 
 import { MaterialIcon } from '@/components/shared/MaterialIcon';
 import { toast } from '@/components/ui/sonner';
-import { messageForCode } from '@/lib/error-messages';
-import { ALLOWED_IMAGE_MIME } from '@/lib/constants';
 import { cn } from '@/lib/utils';
-import type { TiptapDoc, UploadResult } from './types';
+import type { TiptapDoc } from './types';
 
 /**
  * RichTextEditor — TDD §6.7 & A-05.
@@ -60,9 +57,6 @@ function ToolbarButton({
 }
 
 function Toolbar({ editor }: { editor: Editor }) {
-  const fileRef = React.useRef<HTMLInputElement | null>(null);
-  const [uploading, setUploading] = React.useState(false);
-
   const addLink = () => {
     const previous = editor.getAttributes('link').href as string | undefined;
     const url = window.prompt('URL tautan (http/https/mailto):', previous ?? 'https://');
@@ -74,30 +68,19 @@ function Toolbar({ editor }: { editor: Editor }) {
     editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
   };
 
-  const uploadImage = async (file: File) => {
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('kind', 'material-image');
-
-      const response = await fetch('/api/v1/admin/uploads', {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      });
-      const payload = (await response.json()) as { data?: UploadResult; error?: { code: string } };
-
-      if (!response.ok || !payload.data) {
-        toast.error(messageForCode(payload.error?.code));
-        return;
-      }
-      editor.chain().focus().setImage({ src: payload.data.publicUrl }).run();
-    } catch {
-      toast.error(messageForCode('NETWORK_ERROR'));
-    } finally {
-      setUploading(false);
+  /**
+   * MODE INSERT-URL (sementara): gambar disisipkan lewat URL yang sudah
+   * dihosting di tempat lain, bukan upload file — storage persisten belum
+   * dipasang di Vercel. Host non-https tetap akan dibuang sanitasi server (§8.4).
+   */
+  const addImage = () => {
+    const url = window.prompt('URL gambar (https):', 'https://');
+    if (url === null || url === '' || url === 'https://') return;
+    if (!/^https:\/\/.+/.test(url.trim())) {
+      toast.error('URL gambar tidak valid. Gunakan tautan lengkap berawalan https://');
+      return;
     }
+    editor.chain().focus().setImage({ src: url.trim() }).run();
   };
 
   return (
@@ -148,24 +131,7 @@ function Toolbar({ editor }: { editor: Editor }) {
         active={editor.isActive('codeBlock')}
         onClick={() => editor.chain().focus().toggleCodeBlock().run()}
       />
-      <ToolbarButton
-        icon="image"
-        label="Sisipkan gambar"
-        disabled={uploading}
-        onClick={() => fileRef.current?.click()}
-      />
-
-      <input
-        ref={fileRef}
-        type="file"
-        accept={ALLOWED_IMAGE_MIME.join(',')}
-        className="sr-only"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) void uploadImage(file);
-          event.target.value = '';
-        }}
-      />
+      <ToolbarButton icon="image" label="Sisipkan gambar dari URL" onClick={addImage} />
     </div>
   );
 }

@@ -144,13 +144,15 @@ describe('sanitasi rich text (TDD §8.4)', () => {
     expect(html).toContain('rel="noopener noreferrer nofollow"');
   });
 
-  it('hanya mengizinkan src gambar dari media sendiri', () => {
+  // Mode insert-URL (sementara): https eksternal diizinkan; data:/http eksternal tetap ditolak.
+  it('mengizinkan src gambar media sendiri & https eksternal, menolak data: dan http eksternal', () => {
     const html = renderMaterialContent(
       {
         type: 'doc',
         content: [
           { type: 'image', attrs: { src: '/api/v1/media/cover/2026/08/aman.png', alt: 'aman' } },
-          { type: 'image', attrs: { src: 'https://pelacak.example.com/x.png' } },
+          { type: 'image', attrs: { src: 'https://cdn.example.com/x.png' } },
+          { type: 'image', attrs: { src: 'http://insecure.example.com/x.png' } },
           { type: 'image', attrs: { src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=' } },
         ],
       },
@@ -158,7 +160,8 @@ describe('sanitasi rich text (TDD §8.4)', () => {
     ).contentHtml;
 
     expect(html).toContain('/api/v1/media/cover/2026/08/aman.png');
-    expect(html).not.toContain('pelacak.example.com');
+    expect(html).toContain('https://cdn.example.com/x.png');
+    expect(html).not.toContain('insecure.example.com');
     expect(html).not.toContain('data:image');
   });
 

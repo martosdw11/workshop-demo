@@ -28,9 +28,9 @@ export const quotaSchema = z
   .transform((value) => value ?? null);
 
 /**
- * Cover hanya boleh berupa URL hasil `POST /admin/uploads` (§8.2) — path
- * `/api/v1/media/…` atau URL absolut dari penyedia blob. Validasi bentuknya di
- * sini; kecocokan host disaring lagi saat sanitasi konten (§8.4).
+ * Cover berupa URL: path `/api/v1/media/…` (peninggalan mode upload) atau URL
+ * absolut http(s) — mode insert-URL sementara menerima gambar yang dihosting
+ * eksternal. Validasi bentuknya di sini; host disaring lagi saat render (§8.4).
  */
 export const coverUrlSchema = z
   .string()

@@ -39,4 +39,8 @@ export type MaterialTreeResponse = {
   totalPoints: number;
 };
 
+/**
+ * Bentuk respons `POST /admin/uploads`. UI sedang memakai mode insert-URL
+ * (tanpa upload), tapi tipe & endpoint-nya dipertahankan untuk kembali nanti.
+ */
 export type UploadResult = { publicUrl: string; key: string; bytes: number };

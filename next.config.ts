@@ -24,7 +24,9 @@ const contentSecurityPolicy = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
   "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: blob:${mediaPublicHost ? ` ${mediaPublicHost}` : ''} https://*.public.blob.vercel-storage.com`,
+  // `https:` menyertai mode insert-URL sementara (gambar dari host eksternal
+  // mana pun) — sempitkan kembali ke whitelist host saat fitur upload aktif lagi.
+  `img-src 'self' data: blob: https:${mediaPublicHost ? ` ${mediaPublicHost}` : ''}`,
   "font-src 'self'",
   "connect-src 'self'",
   "object-src 'none'",
