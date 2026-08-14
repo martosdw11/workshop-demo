@@ -27,8 +27,14 @@ export type RateLimitRule = {
 export const RATE_LIMITS = {
   /** 5 kegagalan / 15 menit, identifier `email` + IP (§9.3). */
   login: { scope: 'login', limit: 5, windowSeconds: 15 * 60 },
-  /** 3 / jam per IP — anti pendaftaran massal (§9.3). */
-  register: { scope: 'register', limit: 3, windowSeconds: 60 * 60 },
+  /** Registrasi/jam per IP — dikalibrasi lewat env RATE_LIMIT_REGISTER_PER_HOUR
+   *  (default 300, mengakomodasi pendaftaran massal saat workshop). Semula 3
+   *  sebagai anti pendaftaran massal (§9.3). */
+  register: {
+    scope: 'register',
+    limit: env.RATE_LIMIT_REGISTER_PER_HOUR,
+    windowSeconds: 60 * 60,
+  },
   /** 10 / menit per peserta (PRD §7.2), dapat dikalibrasi lewat env. */
   response: {
     scope: 'response',

@@ -40,6 +40,10 @@ const baseSchema = z.object({
 
   // Perilaku aplikasi
   RATE_LIMIT_RESPONSE_PER_MINUTE: intFromEnv(10),
+  /** Batas registrasi/jam per IP. Default 300 untuk mengakomodasi pendaftaran
+   *  massal saat workshop (banyak peserta di satu jaringan/NAT). Turunkan bila
+   *  ingin proteksi anti-spam lebih ketat (TDD §9.3 semula 3). */
+  RATE_LIMIT_REGISTER_PER_HOUR: intFromEnv(300),
   DASHBOARD_CACHE_TTL_SECONDS: intFromEnv(30),
   STALLED_THRESHOLD_DAYS: intFromEnv(3),
 
