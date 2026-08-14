@@ -7,20 +7,20 @@ import { enroll } from '@/server/services/enrollment.service';
 import { adminDeleteResponse } from '@/server/services/event-detail.service';
 import {
   createResponse,
-  deleteOwnIssueResponse,
+  deleteOwnResponse,
   listResponses,
-  updateOwnIssueResponse,
+  updateOwnResponse,
 } from '@/server/services/response.service';
 
 import { cleanupTestData, createTestEvent, createTestUser, type TestEvent } from '../helpers/fixtures';
 
 /**
- * Fitur edit issue + moderasi admin.
+ * Fitur edit/hapus respons milik sendiri + moderasi admin.
  *
  * Aturan:
- *  - penulis boleh meng-edit & menghapus respons ISSUE miliknya sendiri;
+ *  - penulis boleh meng-edit & menghapus respons miliknya sendiri — SEMUA
+ *    tipe (jawaban, komentar, issue);
  *  - milik peserta lain: `403 FORBIDDEN` — membantu ≠ mengubah pesan orang;
- *  - `answer`/`comment` tetap immutable bagi peserta (`422 NOT_AN_ISSUE`);
  *  - setelah finish: `403 ENROLLMENT_COMPLETED` (§4.5);
  *  - admin all-access: hapus respons apa pun (`adminDeleteResponse`).
  */
@@ -46,7 +46,7 @@ async function setupDuaPeserta() {
   return { event, userA, userB };
 }
 
-describe('edit respons issue milik sendiri', () => {
+describe('edit respons milik sendiri', () => {
   it('penulis meng-edit issue-nya: konten berganti, editedAt terisi', async () => {
     const { event, userA } = await setupDuaPeserta();
     const { response } = await createResponse(event.materialIds[0], userA, {
@@ -55,7 +55,7 @@ describe('edit respons issue milik sendiri', () => {
     });
     expect(response.editedAt).toBeNull();
 
-    const updated = await updateOwnIssueResponse(response.id, userA, {
+    const updated = await updateOwnResponse(response.id, userA, {
       contentJson: {
         type: 'doc',
         content: [
@@ -81,27 +81,34 @@ describe('edit respons issue milik sendiri', () => {
     });
 
     await expect(
-      updateOwnIssueResponse(response.id, userA, { content: 'Diambil alih.' }),
+      updateOwnResponse(response.id, userA, { content: 'Diambil alih.' }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN', status: 403 });
-    await expect(deleteOwnIssueResponse(response.id, userA)).rejects.toMatchObject({
+    await expect(deleteOwnResponse(response.id, userA)).rejects.toMatchObject({
       code: 'FORBIDDEN',
       status: 403,
     });
   });
 
-  it('answer/comment tetap immutable bagi peserta (NOT_AN_ISSUE)', async () => {
+  it('jawaban & komentar milik sendiri juga bisa diedit dan dihapus', async () => {
     const { event, userA } = await setupDuaPeserta();
-    const { response } = await createResponse(event.materialIds[0], userA, {
+    const materialId = event.materialIds[0];
+    const { response: jawaban } = await createResponse(materialId, userA, {
       type: 'answer',
       content: 'Jawaban.',
     });
-
-    await expect(
-      updateOwnIssueResponse(response.id, userA, { content: 'Jawaban revisi.' }),
-    ).rejects.toMatchObject({ code: 'NOT_AN_ISSUE', status: 422 });
-    await expect(deleteOwnIssueResponse(response.id, userA)).rejects.toMatchObject({
-      code: 'NOT_AN_ISSUE',
+    const { response: komentar } = await createResponse(materialId, userA, {
+      type: 'comment',
+      content: 'Komentar.',
     });
+
+    const updated = await updateOwnResponse(jawaban.id, userA, { content: 'Jawaban revisi.' });
+    expect(updated.content).toBe('Jawaban revisi.');
+    expect(updated.type).toBe('answer');
+    expect(updated.editedAt).not.toBeNull();
+
+    await deleteOwnResponse(komentar.id, userA);
+    const timeline = await listResponses(materialId, userA, { type: 'comment', limit: 20 });
+    expect(timeline.items).toHaveLength(0);
   });
 
   it('setelah enrollment completed ditolak ENROLLMENT_COMPLETED', async () => {
@@ -117,7 +124,7 @@ describe('edit respons issue milik sendiri', () => {
     `);
 
     await expect(
-      updateOwnIssueResponse(response.id, userA, { content: 'Telat edit.' }),
+      updateOwnResponse(response.id, userA, { content: 'Telat edit.' }),
     ).rejects.toMatchObject({ code: 'ENROLLMENT_COMPLETED', status: 403 });
   });
 });
@@ -131,7 +138,7 @@ describe('hapus respons', () => {
       content: 'Akan dihapus.',
     });
 
-    await deleteOwnIssueResponse(response.id, userA);
+    await deleteOwnResponse(response.id, userA);
 
     const timeline = await listResponses(materialId, userA, { type: 'issue', limit: 20 });
     expect(timeline.items).toHaveLength(0);

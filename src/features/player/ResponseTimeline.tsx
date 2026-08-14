@@ -43,7 +43,7 @@ import {
  * dengan `whitespace-pre-wrap`.
  *
  * `actions` (opsional) dirender di pojok kanan header — dipakai timeline untuk
- * tombol Edit/Hapus pada issue milik user login sendiri.
+ * tombol Edit/Hapus pada pesan milik user login sendiri (semua tipe).
  */
 export function ResponseItem({
   item,
@@ -119,10 +119,10 @@ type ResponsePage = { items: ResponseItemData[]; nextCursor: string | null };
  * ResponseTimeline — TDD §6.6: infinite scroll 20 item per halaman
  * (`PAGE_SIZE.responses`), keyset cursor dari §3.1.
  *
- * Fitur edit issue: pada tab Issue (yang terlihat lintas peserta agar user lain
- * bisa membantu), pesan yang DIBUAT USER LOGIN SENDIRI mendapat aksi
- * Edit & Hapus. Milik peserta lain hanya bisa dibaca — penghapusan lintas
- * pemilik adalah wewenang admin (layar admin Responses).
+ * Aksi Edit & Hapus tersedia di SEMUA tab (Jawaban, Komentar, Issue) — tetapi
+ * hanya pada pesan yang DIBUAT USER LOGIN SENDIRI. Milik peserta lain (issue
+ * lintas peserta) hanya bisa dibaca — penghapusan lintas pemilik adalah
+ * wewenang admin (layar admin Responses).
  */
 export function ResponseTimeline({
   materialId,
@@ -234,9 +234,8 @@ export function ResponseTimeline({
     <>
       <ul className="flex flex-col gap-4">
         {items.map((item) => {
-          // Aksi hanya untuk ISSUE milik user login sendiri (bukan optimistic).
-          const editable =
-            canModify && item.type === 'issue' && item.author.id === currentUserId && item.id > 0;
+          // Aksi hanya untuk pesan milik user login sendiri (bukan optimistic).
+          const editable = canModify && item.author.id === currentUserId && item.id > 0;
 
           if (editable && item.id === editingId) {
             return (

@@ -28,11 +28,14 @@ import {
  * Double-submit diredam di UI (tombol disabled saat pending) + rate limit
  * 10/menit, bukan oleh constraint database.
  *
- * REVISI: respons TIDAK lagi sepenuhnya immutable. Penulis boleh meng-edit dan
- * menghapus respons ISSUE miliknya sendiri (`updateOwnIssueResponse` /
- * `deleteOwnIssueResponse`); admin boleh menghapus respons apa pun
- * (`adminDeleteResponse` di event-detail.service). `answer`/`comment` tetap
- * immutable bagi peserta — `answer` menyentuh scoring (§4.3).
+ * REVISI: respons TIDAK lagi immutable. Penulis boleh meng-edit dan menghapus
+ * respons miliknya sendiri — semua tipe: jawaban, komentar, issue
+ * (`updateOwnResponse` / `deleteOwnResponse`); admin boleh menghapus respons
+ * apa pun (`adminDeleteResponse` di event-detail.service).
+ *
+ * CATATAN scoring: menghapus `answer` TIDAK menarik kembali poin yang sudah
+ * diberikan (all-or-nothing, dicatat di `material_progress` saat complete,
+ * §4.1) — penghapusan hanya memengaruhi kelayakan complete BERIKUTNYA.
  */
 
 export type ResponseItem = {
@@ -220,44 +223,40 @@ export async function createResponse(
 }
 
 /**
- * Guard bersama edit/hapus milik-sendiri (fitur edit issue):
+ * Guard bersama edit/hapus milik-sendiri:
  *  - respons harus ada (`404 NOT_FOUND`),
  *  - milik pemanggil (`403 FORBIDDEN`) — fitur hanya berlaku untuk pesan yang
  *    dibuat user login sendiri; hapus lintas-pemilik hanya untuk admin
  *    (`adminDeleteResponse`, event-detail.service),
- *  - bertipe `issue` (`422 NOT_AN_ISSUE`) — `answer`/`comment` tetap immutable
- *    bagi peserta karena `answer` menyentuh scoring (§4.3),
  *  - enrollment masih `in_progress` (`403 ENROLLMENT_COMPLETED`, §4.5).
  */
-async function requireOwnIssueResponse(
+async function requireOwnResponse(
   responseId: number,
   user: SessionUser,
 ): Promise<void> {
   const rows = (await db.execute<{
     user_id: number;
-    type: ResponseType;
     enrollment_status: 'in_progress' | 'completed';
   }>(sql`
-    SELECT r.user_id, r.type, e.status AS enrollment_status
+    SELECT r.user_id, e.status AS enrollment_status
       FROM responses r
       JOIN enrollments e ON e.id = r.enrollment_id
      WHERE r.id = ${responseId}
-  `)) as unknown as { user_id: number; type: ResponseType; enrollment_status: string }[];
+  `)) as unknown as { user_id: number; enrollment_status: string }[];
 
   const row = rows[0];
   if (!row) throw new AppError('NOT_FOUND');
   if (row.user_id !== user.id) throw new AppError('FORBIDDEN');
-  if (row.type !== 'issue') throw new AppError('NOT_AN_ISSUE', { type: row.type });
   if (row.enrollment_status !== 'in_progress') throw new AppError('ENROLLMENT_COMPLETED');
 }
 
-/** `PATCH /responses/:id` — penulis memperbaiki issue-nya sendiri. */
-export async function updateOwnIssueResponse(
+/** `PATCH /responses/:id` — penulis memperbaiki responsnya sendiri (semua tipe). */
+export async function updateOwnResponse(
   responseId: number,
   user: SessionUser,
   input: UpdateResponseInput,
 ): Promise<ResponseItem> {
-  await requireOwnIssueResponse(responseId, user);
+  await requireOwnResponse(responseId, user);
   const { content, contentHtml } = deriveContent(input);
 
   const rows = (await db.execute<ResponseRow>(sql`
@@ -276,11 +275,11 @@ export async function updateOwnIssueResponse(
   return toItem(rows[0]);
 }
 
-/** `DELETE /responses/:id` — penulis menghapus issue-nya sendiri. */
-export async function deleteOwnIssueResponse(
+/** `DELETE /responses/:id` — penulis menghapus responsnya sendiri (semua tipe). */
+export async function deleteOwnResponse(
   responseId: number,
   user: SessionUser,
 ): Promise<void> {
-  await requireOwnIssueResponse(responseId, user);
+  await requireOwnResponse(responseId, user);
   await db.execute(sql`DELETE FROM responses WHERE id = ${responseId}`);
 }
