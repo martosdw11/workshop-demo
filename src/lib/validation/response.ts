@@ -34,6 +34,20 @@ export const createResponseSchema = z
     path: ['content'],
   });
 
+/**
+ * `PATCH /responses/:id` — edit isi respons (fitur edit issue). Bentuknya sama
+ * dengan create minus `type`: tipe respons tidak boleh berubah lewat edit.
+ */
+export const updateResponseSchema = z
+  .object({
+    content: responseContentSchema.optional(),
+    contentJson: contentJsonSchema,
+  })
+  .refine((value) => value.content !== undefined || value.contentJson !== null, {
+    message: 'Respons tidak boleh kosong.',
+    path: ['content'],
+  });
+
 export const responseListQuerySchema = z.object({
   type: responseTypeSchema.optional(),
   cursor: cursorParam,
@@ -68,6 +82,10 @@ export const activityQuerySchema = z.object({
  * `content` saja.
  */
 export type CreateResponseInput = Omit<z.infer<typeof createResponseSchema>, 'contentJson'> & {
+  contentJson?: z.infer<typeof contentJsonSchema>;
+};
+/** Pelonggaran tipe yang sama dengan `CreateResponseInput` di atas. */
+export type UpdateResponseInput = Omit<z.infer<typeof updateResponseSchema>, 'contentJson'> & {
   contentJson?: z.infer<typeof contentJsonSchema>;
 };
 export type ResponseListQuery = z.infer<typeof responseListQuerySchema>;

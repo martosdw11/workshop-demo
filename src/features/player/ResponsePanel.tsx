@@ -65,7 +65,12 @@ export function ResponsePanel({
               />
             )}
 
-            <ResponseTimeline materialId={materialId} type={tabType} />
+            <ResponseTimeline
+              materialId={materialId}
+              type={tabType}
+              currentUserId={author.id}
+              canModify={!readOnly}
+            />
           </TabsContent>
         ))}
       </Tabs>

@@ -123,6 +123,18 @@ export function EventResponsesTable({
     onError: (mutationError) => toast.error(messageForError(mutationError)),
   });
 
+  // Admin all-access (moderasi): boleh menghapus respons APA PUN — termasuk
+  // yang dibuat peserta lain — lewat `DELETE /admin/responses/:id`.
+  const deleteMutation = useMutation({
+    mutationFn: (responseId: number) => api.delete(`/admin/responses/${responseId}`),
+    onSuccess: () => {
+      toast.success('Respons dihapus');
+      void queryClient.invalidateQueries({ queryKey });
+      void queryClient.invalidateQueries({ queryKey: qk.admin.dashboard.activity(eventId) });
+    },
+    onError: (mutationError) => toast.error(messageForError(mutationError)),
+  });
+
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
   return (
@@ -227,23 +239,42 @@ export function EventResponsesTable({
                 )}
               </div>
 
-              {row.type === 'issue' && (
+              <span className="flex shrink-0 flex-col items-end gap-2 self-start">
+                {row.type === 'issue' && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={resolveMutation.isPending}
+                    onClick={() =>
+                      resolveMutation.mutate({
+                        responseId: row.id,
+                        next: row.issueStatus === 'resolved' ? 'open' : 'resolved',
+                      })
+                    }
+                  >
+                    <MaterialIcon name={row.issueStatus === 'resolved' ? 'undo' : 'task_alt'} />
+                    {row.issueStatus === 'resolved' ? 'Buka lagi' : 'Tandai resolved'}
+                  </Button>
+                )}
                 <Button
                   variant="secondary"
                   size="sm"
-                  className="shrink-0 self-start"
-                  disabled={resolveMutation.isPending}
-                  onClick={() =>
-                    resolveMutation.mutate({
-                      responseId: row.id,
-                      next: row.issueStatus === 'resolved' ? 'open' : 'resolved',
-                    })
-                  }
+                  className="text-error"
+                  disabled={deleteMutation.isPending}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Hapus respons dari ${row.user.name}? Tindakan tidak bisa dibatalkan.`,
+                      )
+                    ) {
+                      deleteMutation.mutate(row.id);
+                    }
+                  }}
                 >
-                  <MaterialIcon name={row.issueStatus === 'resolved' ? 'undo' : 'task_alt'} />
-                  {row.issueStatus === 'resolved' ? 'Buka lagi' : 'Tandai resolved'}
+                  <MaterialIcon name="delete" />
+                  Hapus
                 </Button>
-              )}
+              </span>
             </li>
           ))}
         </ul>

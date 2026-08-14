@@ -1,20 +1,34 @@
 'use client';
 
-import { useInfiniteQuery } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+  type InfiniteData,
+} from '@tanstack/react-query';
 import * as React from 'react';
 
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ErrorState } from '@/components/shared/ErrorState';
 import { ListSkeleton } from '@/components/shared/LoadingSkeletons';
+import { MaterialIcon } from '@/components/shared/MaterialIcon';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { apiFetchWithMeta } from '@/lib/api-client';
+import { toast } from '@/components/ui/sonner';
+import { api, apiFetchWithMeta } from '@/lib/api-client';
 import { PAGE_SIZE } from '@/lib/constants';
+import { messageForError } from '@/lib/error-messages';
 import { formatRelativeTime } from '@/lib/format';
 import { qk } from '@/lib/query-keys';
 import { cn } from '@/lib/utils';
-import { RESPONSE_TAB_LABELS, type ResponseItemData, type ResponseType } from './types';
+import { ResponseRichEditor } from './ResponseRichEditor';
+import {
+  RESPONSE_TAB_LABELS,
+  type ResponseDoc,
+  type ResponseItemData,
+  type ResponseType,
+} from './types';
 
 /**
  * ResponseItem — TDD §6.6: avatar inisial, nama, waktu relatif.
@@ -27,8 +41,17 @@ import { RESPONSE_TAB_LABELS, type ResponseItemData, type ResponseType } from '.
  * `dangerouslySetInnerHTML`. Respons lama era plain-text (`contentHtml: null`)
  * dan item optimistic jatuh kembali ke `content` sebagai text node biasa
  * dengan `whitespace-pre-wrap`.
+ *
+ * `actions` (opsional) dirender di pojok kanan header — dipakai timeline untuk
+ * tombol Edit/Hapus pada issue milik user login sendiri.
  */
-export function ResponseItem({ item }: { item: ResponseItemData }) {
+export function ResponseItem({
+  item,
+  actions,
+}: {
+  item: ResponseItemData;
+  actions?: React.ReactNode;
+}) {
   const isOptimistic = item.id < 0;
 
   return (
@@ -54,7 +77,9 @@ export function ResponseItem({ item }: { item: ResponseItemData }) {
             )}
             <span className="text-label-sm text-on-surface-variant">
               {isOptimistic ? 'Mengirim…' : formatRelativeTime(item.createdAt)}
+              {item.editedAt && ' · (diedit)'}
             </span>
+            {actions}
           </span>
         </div>
         {item.contentHtml ? (
@@ -70,22 +95,54 @@ export function ResponseItem({ item }: { item: ResponseItemData }) {
   );
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+/**
+ * Isi awal editor mode edit: `content_html` tersanitasi dari server, atau —
+ * untuk respons lama era plain-text — teksnya di-escape lalu dibungkus
+ * paragraf agar baris baru tidak hilang saat TipTap mem-parse.
+ */
+function htmlForEditor(item: ResponseItemData): string {
+  if (item.contentHtml) return item.contentHtml;
+  return `<p>${escapeHtml(item.content).replaceAll('\n', '<br>')}</p>`;
+}
+
 type ResponsePage = { items: ResponseItemData[]; nextCursor: string | null };
 
 /**
  * ResponseTimeline — TDD §6.6: infinite scroll 20 item per halaman
  * (`PAGE_SIZE.responses`), keyset cursor dari §3.1.
+ *
+ * Fitur edit issue: pada tab Issue (yang terlihat lintas peserta agar user lain
+ * bisa membantu), pesan yang DIBUAT USER LOGIN SENDIRI mendapat aksi
+ * Edit & Hapus. Milik peserta lain hanya bisa dibaca — penghapusan lintas
+ * pemilik adalah wewenang admin (layar admin Responses).
  */
 export function ResponseTimeline({
   materialId,
   type,
+  currentUserId,
+  canModify = false,
 }: {
   materialId: number;
   type: ResponseType;
+  /** id user login — pembanding kepemilikan untuk aksi Edit/Hapus. */
+  currentUserId?: number;
+  /** `false` saat read-only (§4.5 setelah finish) — aksi disembunyikan. */
+  canModify?: boolean;
 }) {
+  const queryClient = useQueryClient();
+  const queryKey = qk.player.responses(materialId, type);
+
   const { data, error, isPending, isFetchingNextPage, hasNextPage, fetchNextPage, refetch } =
     useInfiniteQuery({
-      queryKey: qk.player.responses(materialId, type),
+      queryKey,
       initialPageParam: null as string | null,
       queryFn: async ({ pageParam }) => {
         const response = await apiFetchWithMeta<{ items: ResponseItemData[] }>(
@@ -103,6 +160,63 @@ export function ResponseTimeline({
 
   const items = React.useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data]);
 
+  const [editingId, setEditingId] = React.useState<number | null>(null);
+  const [draft, setDraft] = React.useState<{ doc: ResponseDoc; text: string } | null>(null);
+
+  const closeEditor = () => {
+    setEditingId(null);
+    setDraft(null);
+  };
+
+  const replaceInCache = (updated: ResponseItemData) =>
+    queryClient.setQueryData<InfiniteData<ResponsePage>>(queryKey, (old) =>
+      old
+        ? {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              items: page.items.map((item) => (item.id === updated.id ? updated : item)),
+            })),
+          }
+        : old,
+    );
+
+  const removeFromCache = (id: number) =>
+    queryClient.setQueryData<InfiniteData<ResponsePage>>(queryKey, (old) =>
+      old
+        ? {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              items: page.items.filter((item) => item.id !== id),
+            })),
+          }
+        : old,
+    );
+
+  const updateMutation = useMutation({
+    mutationFn: (value: { id: number; doc: ResponseDoc }) =>
+      api.patch<{ response: ResponseItemData }>(`/responses/${value.id}`, {
+        contentJson: value.doc,
+      }),
+    onSuccess: (data) => {
+      replaceInCache(data.response);
+      closeEditor();
+      toast.success('Respons diperbarui');
+    },
+    onError: (mutationError) => toast.error(messageForError(mutationError)),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.delete(`/responses/${id}`),
+    onSuccess: (_data, id) => {
+      removeFromCache(id);
+      if (id === editingId) closeEditor();
+      toast.success('Respons dihapus');
+    },
+    onError: (mutationError) => toast.error(messageForError(mutationError)),
+  });
+
   if (isPending) return <ListSkeleton count={3} />;
   if (error && items.length === 0) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
@@ -119,9 +233,82 @@ export function ResponseTimeline({
   return (
     <>
       <ul className="flex flex-col gap-4">
-        {items.map((item) => (
-          <ResponseItem key={item.id} item={item} />
-        ))}
+        {items.map((item) => {
+          // Aksi hanya untuk ISSUE milik user login sendiri (bukan optimistic).
+          const editable =
+            canModify && item.type === 'issue' && item.author.id === currentUserId && item.id > 0;
+
+          if (editable && item.id === editingId) {
+            return (
+              <li key={item.id} className="flex gap-4">
+                <Avatar className="mt-1 shrink-0">
+                  <AvatarFallback>{item.author.initials}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1">
+                  <ResponseRichEditor
+                    id={`edit-response-${item.id}`}
+                    placeholder="Perbarui respons Anda…"
+                    initialHtml={htmlForEditor(item)}
+                    onChange={setDraft}
+                  />
+                  <div className="mt-2 flex justify-end gap-2">
+                    <Button variant="secondary" size="sm" onClick={closeEditor}>
+                      Batal
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={updateMutation.isPending || (draft?.text.trim() ?? '') === ''}
+                      onClick={() =>
+                        draft && updateMutation.mutate({ id: item.id, doc: draft.doc })
+                      }
+                    >
+                      {updateMutation.isPending ? 'Menyimpan…' : 'Simpan'}
+                    </Button>
+                  </div>
+                </div>
+              </li>
+            );
+          }
+
+          return (
+            <ResponseItem
+              key={item.id}
+              item={item}
+              actions={
+                editable ? (
+                  <span className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      aria-label="Edit respons"
+                      title="Edit respons"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-on-surface-variant transition-colors hover:bg-surface-container-high focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                      onClick={() => {
+                        setDraft(null);
+                        setEditingId(item.id);
+                      }}
+                    >
+                      <MaterialIcon name="edit" className="text-[18px]" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Hapus respons"
+                      title="Hapus respons"
+                      disabled={deleteMutation.isPending}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-error transition-colors hover:bg-surface-container-high focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50"
+                      onClick={() => {
+                        if (window.confirm('Hapus respons ini? Tindakan tidak bisa dibatalkan.')) {
+                          deleteMutation.mutate(item.id);
+                        }
+                      }}
+                    >
+                      <MaterialIcon name="delete" className="text-[18px]" />
+                    </button>
+                  </span>
+                ) : undefined
+              }
+            />
+          );
+        })}
       </ul>
 
       {hasNextPage && (

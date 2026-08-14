@@ -28,6 +28,15 @@ dicek di `GET /api/v1/health` (field `version`).
   `[alt|gambar]`); HTML tersanitasi tersimpan di kolom baru
   `responses.content_html` (migrasi 0002). Respons lama era plain-text tetap
   tampil apa adanya.
+- **Edit & hapus respons issue:** penulis dapat meng-edit dan menghapus respons
+  Issue miliknya sendiri langsung dari timeline (`PATCH`/`DELETE
+  /api/v1/responses/:id`; penanda "(diedit)" via kolom baru
+  `responses.edited_at`, migrasi 0003). Aksi hanya muncul pada pesan yang
+  dibuat user login sendiri — issue peserta lain tetap read-only. Jawaban &
+  Komentar tetap immutable bagi peserta (menyentuh scoring). Admin mendapat
+  all-access moderasi: tombol Hapus pada layar Responses dapat menghapus
+  respons milik siapa pun (`DELETE /api/v1/admin/responses/:id`); poin yang
+  sudah diberikan tidak ditarik kembali.
 - **Visibilitas timeline respons (revisi A-B08):** timeline Jawaban & Komentar
   di Learning Player kini hanya menampilkan respons milik peserta itu sendiri;
   tab Issue tetap memperlihatkan issue seluruh peserta (kendala dialami

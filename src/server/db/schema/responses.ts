@@ -45,6 +45,11 @@ export const responses = pgTable(
     /** Hanya bermakna untuk `type = 'issue'`. */
     issueStatus: issueStatusEnum('issue_status'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * Terisi saat penulis mengedit responsnya (fitur edit issue). `NULL` =
+     * belum pernah diedit; FE menampilkan penanda "(diedit)" bila terisi.
+     */
+    editedAt: timestamp('edited_at', { withTimezone: true }),
   },
   (t) => [
     // Index #11 — timeline per tab, sort+limit 20 tanpa sort node

@@ -141,17 +141,35 @@ function hasImageNode(node: unknown): boolean {
   return Array.isArray(n.content) && n.content.some(hasImageNode);
 }
 
+/**
+ * Ambil `{doc, text}` dari editor. Paritas dengan ekstraksi server
+ * (`renderResponseContent`): respons yang hanya berisi gambar tetap dianggap
+ * terisi — server menyimpan placeholder `[gambar]` sebagai plain text-nya.
+ */
+function snapshotOf(instance: Editor): { doc: ResponseDoc; text: string } {
+  const doc = instance.getJSON() as ResponseDoc;
+  let text = instance.getText({ blockSeparator: '\n' });
+  if (text.trim() === '' && hasImageNode(doc)) text = '[gambar]';
+  return { doc, text };
+}
+
 export function ResponseRichEditor({
   id,
   placeholder,
   invalid,
   describedBy,
+  initialHtml,
   onChange,
 }: {
   id: string;
   placeholder: string;
   invalid?: boolean;
   describedBy?: string;
+  /**
+   * Isi awal editor untuk mode EDIT — `content_html` tersanitasi dari server
+   * (TipTap mem-parse HTML kembali ke dokumen). Kosongkan untuk composer baru.
+   */
+  initialHtml?: string;
   /** `text` dipakai validasi panjang & optimistic update; `doc` dikirim ke API. */
   onChange: (value: { doc: ResponseDoc; text: string }) => void;
 }) {
@@ -165,7 +183,7 @@ export function ResponseRichEditor({
       }),
       Image,
     ],
-    content: { type: 'doc', content: [] },
+    content: initialHtml ?? { type: 'doc', content: [] },
     editorProps: {
       attributes: {
         id,
@@ -175,15 +193,12 @@ export function ResponseRichEditor({
         ...(describedBy ? { 'aria-describedby': describedBy } : {}),
       },
     },
-    onUpdate: ({ editor: instance }) => {
-      const doc = instance.getJSON() as ResponseDoc;
-      let text = instance.getText({ blockSeparator: '\n' });
-      // Paritas dengan ekstraksi server (`renderResponseContent`): respons yang
-      // hanya berisi gambar tetap dianggap terisi — server menyimpan placeholder
-      // `[gambar]` sebagai plain text-nya.
-      if (text.trim() === '' && hasImageNode(doc)) text = '[gambar]';
-      onChange({ doc, text });
+    // Mode edit: emit sekali saat mount supaya pemanggil langsung memegang
+    // draft awal (tombol Simpan tidak menunggu ketikan pertama).
+    onCreate: ({ editor: instance }) => {
+      if (initialHtml) onChange(snapshotOf(instance));
     },
+    onUpdate: ({ editor: instance }) => onChange(snapshotOf(instance)),
   });
 
   if (!editor) {

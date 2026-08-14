@@ -30,6 +30,8 @@ export type ResponseItemData = {
   contentHtml: string | null;
   issueStatus: 'open' | 'resolved' | null;
   createdAt: string;
+  /** Terisi bila penulis pernah meng-edit respons ini — FE menampilkan "(diedit)". */
+  editedAt: string | null;
   author: { id: number; name: string; initials: string };
 };
 

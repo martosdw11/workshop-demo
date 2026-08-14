@@ -276,9 +276,6 @@ export async function getEventResponses(
 
 /**
  * `PATCH /admin/responses/:id/issue-status` — §3.4. `422 NOT_AN_ISSUE`.
- *
- * Ini SATU-SATUNYA mutasi yang boleh menyentuh baris `responses`: isi respons
- * bersifat immutable dan tidak punya endpoint edit/hapus di kontrak §3.
  */
 export async function updateIssueStatus(
   responseId: number,
@@ -343,4 +340,20 @@ export async function updateIssueStatus(
     material: { id: row.material_id, title: row.material_title, depth: row.depth },
     user: { id: row.user_id, name: row.name, email: row.email, initials: initialsOf(row.name) },
   };
+}
+
+/**
+ * `DELETE /admin/responses/:id` — admin all-access: boleh menghapus respons
+ * APA PUN, termasuk milik peserta lain dan tipe apa pun (moderasi).
+ *
+ * CATATAN scoring: menghapus `answer` TIDAK menarik kembali poin yang sudah
+ * diberikan — poin bersifat all-or-nothing dan dicatat di `material_progress`
+ * saat complete (§4.1); penghapusan hanya memengaruhi kelayakan complete
+ * BERIKUTNYA pada materi itu.
+ */
+export async function adminDeleteResponse(responseId: number): Promise<void> {
+  const rows = (await db.execute<{ id: number }>(sql`
+    DELETE FROM responses WHERE id = ${responseId} RETURNING id
+  `)) as unknown as { id: number }[];
+  if (!rows[0]) throw new AppError('NOT_FOUND');
 }

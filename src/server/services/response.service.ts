@@ -2,7 +2,11 @@ import { sql } from 'drizzle-orm';
 
 import { renderResponseContent } from '@/lib/sanitize-html';
 import { responseContentSchema } from '@/lib/validation/response';
-import type { CreateResponseInput, ResponseListQuery } from '@/lib/validation/response';
+import type {
+  CreateResponseInput,
+  ResponseListQuery,
+  UpdateResponseInput,
+} from '@/lib/validation/response';
 
 import type { SessionUser } from '../auth/session';
 import { db } from '../db/client';
@@ -24,7 +28,11 @@ import {
  * Double-submit diredam di UI (tombol disabled saat pending) + rate limit
  * 10/menit, bukan oleh constraint database.
  *
- * Respons bersifat IMMUTABLE: tidak ada endpoint edit/hapus di kontrak §3.
+ * REVISI: respons TIDAK lagi sepenuhnya immutable. Penulis boleh meng-edit dan
+ * menghapus respons ISSUE miliknya sendiri (`updateOwnIssueResponse` /
+ * `deleteOwnIssueResponse`); admin boleh menghapus respons apa pun
+ * (`adminDeleteResponse` di event-detail.service). `answer`/`comment` tetap
+ * immutable bagi peserta — `answer` menyentuh scoring (§4.3).
  */
 
 export type ResponseItem = {
@@ -37,6 +45,8 @@ export type ResponseItem = {
   contentHtml: string | null;
   issueStatus: IssueStatus | null;
   createdAt: string;
+  /** Terisi bila penulis pernah meng-edit respons ini. */
+  editedAt: string | null;
   author: { id: number; name: string; initials: string };
 };
 
@@ -49,6 +59,7 @@ type ResponseRow = {
   content_html: string | null;
   issue_status: IssueStatus | null;
   created_at: Date;
+  edited_at: Date | null;
   author_id: number;
   author_name: string;
 };
@@ -71,6 +82,7 @@ function toItem(row: ResponseRow): ResponseItem {
     contentHtml: row.content_html,
     issueStatus: row.issue_status,
     createdAt: new Date(row.created_at).toISOString(),
+    editedAt: row.edited_at ? new Date(row.edited_at).toISOString() : null,
     author: {
       id: row.author_id,
       name: row.author_name,
@@ -104,7 +116,7 @@ export async function listResponses(
 
   const rows = (await db.execute<ResponseRow>(sql`
     SELECT r.id, r.material_id, r.enrollment_id, r.type, r.content, r.content_html,
-           r.issue_status, r.created_at, u.id AS author_id, u.name AS author_name
+           r.issue_status, r.created_at, r.edited_at, u.id AS author_id, u.name AS author_name
       FROM responses r
       JOIN users u ON u.id = r.user_id
      WHERE r.material_id = ${materialId}
@@ -124,6 +136,34 @@ export async function listResponses(
   }));
 
   return { items: page.items.map(toItem), nextCursor: page.nextCursor };
+}
+
+/**
+ * Jalur rich editor: `contentJson` di-PRUNE → RENDER → SANITIZE di server
+ * (§8.4). Plain text hasil ekstraksi tetap wajib lolos aturan panjang 1–5000
+ * — dokumen yang hanya berisi node kosong ditolak di sini, bukan oleh CHECK.
+ * Jalur kompatibilitas: klien lama mengirim `content` plain text; schema
+ * menjamin salah satu dari keduanya pasti ada.
+ */
+function deriveContent(input: { content?: string; contentJson?: unknown | null }): {
+  content: string;
+  contentHtml: string | null;
+} {
+  if (input.contentJson !== null && input.contentJson !== undefined) {
+    const rendered = renderResponseContent(input.contentJson, {
+      mediaPublicHost: env.MEDIA_PUBLIC_HOST,
+    });
+    const parsed = responseContentSchema.safeParse(rendered.text);
+    if (!parsed.success) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        undefined,
+        parsed.error.issues[0]?.message ?? 'Respons tidak valid.',
+      );
+    }
+    return { content: parsed.data, contentHtml: rendered.html };
+  }
+  return { content: input.content as string, contentHtml: null };
 }
 
 export type CreateResponseResult = {
@@ -148,41 +188,17 @@ export async function createResponse(
   // CHECK di database (§2.7); nilai awalnya selalu `open`.
   const issueStatus = input.type === 'issue' ? 'open' : null;
 
-  // Jalur rich editor: `contentJson` di-PRUNE → RENDER → SANITIZE di server
-  // (§8.4). Plain text hasil ekstraksi tetap wajib lolos aturan panjang 1–5000
-  // — dokumen yang hanya berisi node kosong ditolak di sini, bukan oleh CHECK.
-  let content: string;
-  let contentHtml: string | null;
-  if (input.contentJson !== null && input.contentJson !== undefined) {
-    const rendered = renderResponseContent(input.contentJson, {
-      mediaPublicHost: env.MEDIA_PUBLIC_HOST,
-    });
-    const parsed = responseContentSchema.safeParse(rendered.text);
-    if (!parsed.success) {
-      throw new AppError(
-        'VALIDATION_ERROR',
-        undefined,
-        parsed.error.issues[0]?.message ?? 'Respons tidak valid.',
-      );
-    }
-    content = parsed.data;
-    contentHtml = rendered.html;
-  } else {
-    // Jalur kompatibilitas: klien lama mengirim plain text; `createResponseSchema`
-    // menjamin salah satu dari `content`/`contentJson` pasti ada.
-    content = input.content as string;
-    contentHtml = null;
-  }
+  const { content, contentHtml } = deriveContent(input);
 
   const inserted = (await db.execute<ResponseRow>(sql`
     WITH baru AS (
       INSERT INTO responses (enrollment_id, material_id, user_id, type, content, content_html, issue_status)
       VALUES (${enrollment.enrollmentId}, ${materialId}, ${user.id},
               ${input.type}::response_type, ${content}, ${contentHtml}, ${issueStatus}::issue_status)
-      RETURNING id, material_id, enrollment_id, type, content, content_html, issue_status, created_at, user_id
+      RETURNING id, material_id, enrollment_id, type, content, content_html, issue_status, created_at, edited_at, user_id
     )
     SELECT b.id, b.material_id, b.enrollment_id, b.type, b.content, b.content_html, b.issue_status, b.created_at,
-           u.id AS author_id, u.name AS author_name
+           b.edited_at, u.id AS author_id, u.name AS author_name
       FROM baru b JOIN users u ON u.id = b.user_id
   `)) as unknown as ResponseRow[];
 
@@ -201,4 +217,70 @@ export async function createResponse(
     response: toItem(inserted[0]),
     materialWillEarnPoints: Boolean(answerRows[0]?.ada),
   };
+}
+
+/**
+ * Guard bersama edit/hapus milik-sendiri (fitur edit issue):
+ *  - respons harus ada (`404 NOT_FOUND`),
+ *  - milik pemanggil (`403 FORBIDDEN`) — fitur hanya berlaku untuk pesan yang
+ *    dibuat user login sendiri; hapus lintas-pemilik hanya untuk admin
+ *    (`adminDeleteResponse`, event-detail.service),
+ *  - bertipe `issue` (`422 NOT_AN_ISSUE`) — `answer`/`comment` tetap immutable
+ *    bagi peserta karena `answer` menyentuh scoring (§4.3),
+ *  - enrollment masih `in_progress` (`403 ENROLLMENT_COMPLETED`, §4.5).
+ */
+async function requireOwnIssueResponse(
+  responseId: number,
+  user: SessionUser,
+): Promise<void> {
+  const rows = (await db.execute<{
+    user_id: number;
+    type: ResponseType;
+    enrollment_status: 'in_progress' | 'completed';
+  }>(sql`
+    SELECT r.user_id, r.type, e.status AS enrollment_status
+      FROM responses r
+      JOIN enrollments e ON e.id = r.enrollment_id
+     WHERE r.id = ${responseId}
+  `)) as unknown as { user_id: number; type: ResponseType; enrollment_status: string }[];
+
+  const row = rows[0];
+  if (!row) throw new AppError('NOT_FOUND');
+  if (row.user_id !== user.id) throw new AppError('FORBIDDEN');
+  if (row.type !== 'issue') throw new AppError('NOT_AN_ISSUE', { type: row.type });
+  if (row.enrollment_status !== 'in_progress') throw new AppError('ENROLLMENT_COMPLETED');
+}
+
+/** `PATCH /responses/:id` — penulis memperbaiki issue-nya sendiri. */
+export async function updateOwnIssueResponse(
+  responseId: number,
+  user: SessionUser,
+  input: UpdateResponseInput,
+): Promise<ResponseItem> {
+  await requireOwnIssueResponse(responseId, user);
+  const { content, contentHtml } = deriveContent(input);
+
+  const rows = (await db.execute<ResponseRow>(sql`
+    WITH diubah AS (
+      UPDATE responses
+         SET content = ${content}, content_html = ${contentHtml}, edited_at = now()
+       WHERE id = ${responseId}
+      RETURNING id, material_id, enrollment_id, type, content, content_html, issue_status,
+                created_at, edited_at, user_id
+    )
+    SELECT d.id, d.material_id, d.enrollment_id, d.type, d.content, d.content_html,
+           d.issue_status, d.created_at, d.edited_at, u.id AS author_id, u.name AS author_name
+      FROM diubah d JOIN users u ON u.id = d.user_id
+  `)) as unknown as ResponseRow[];
+
+  return toItem(rows[0]);
+}
+
+/** `DELETE /responses/:id` — penulis menghapus issue-nya sendiri. */
+export async function deleteOwnIssueResponse(
+  responseId: number,
+  user: SessionUser,
+): Promise<void> {
+  await requireOwnIssueResponse(responseId, user);
+  await db.execute(sql`DELETE FROM responses WHERE id = ${responseId}`);
 }
