@@ -49,6 +49,8 @@ export type ParticipantEventDetail = {
     materialTitle: string;
     type: 'answer' | 'comment' | 'issue';
     content: string;
+    /** HTML tersanitasi di server dari rich editor; `null` untuk respons lama. */
+    contentHtml: string | null;
     issueStatus: 'open' | 'resolved' | null;
     createdAt: string;
   }>;
@@ -77,6 +79,8 @@ export type EventResponseRow = {
   id: number;
   type: 'answer' | 'comment' | 'issue';
   content: string;
+  /** HTML tersanitasi di server dari rich editor; `null` untuk respons lama. */
+  contentHtml: string | null;
   issueStatus: 'open' | 'resolved' | null;
   createdAt: string;
   material: { id: number; title: string; depth: number };

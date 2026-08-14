@@ -5,6 +5,9 @@
  */
 export type ResponseType = 'answer' | 'comment' | 'issue';
 
+/** Dokumen TipTap dari rich editor respons (bentuk yang sama dengan builder). */
+export type ResponseDoc = { type: 'doc'; content?: unknown[] } & Record<string, unknown>;
+
 export type PathNodeData = {
   id: number;
   parentId: number | null;
@@ -23,6 +26,8 @@ export type ResponseItemData = {
   enrollmentId: number;
   type: ResponseType;
   content: string;
+  /** HTML tersanitasi DI SERVER (§8.4); `null` untuk respons lama plain-text. */
+  contentHtml: string | null;
   issueStatus: 'open' | 'resolved' | null;
   createdAt: string;
   author: { id: number; name: string; initials: string };

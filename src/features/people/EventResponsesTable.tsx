@@ -214,9 +214,17 @@ export function EventResponsesTable({
                   </span>
                 </div>
 
-                <p className="whitespace-pre-wrap text-body-sm text-on-surface-variant">
-                  {row.content}
-                </p>
+                {row.contentHtml ? (
+                  <div
+                    className="prose-material text-body-sm text-on-surface-variant"
+                    // HTML sudah tersanitasi DI SERVER (`renderResponseContent`, §8.4).
+                    dangerouslySetInnerHTML={{ __html: row.contentHtml }}
+                  />
+                ) : (
+                  <p className="whitespace-pre-wrap text-body-sm text-on-surface-variant">
+                    {row.content}
+                  </p>
+                )}
               </div>
 
               {row.type === 'issue' && (

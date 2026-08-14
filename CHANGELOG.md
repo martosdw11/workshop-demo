@@ -14,6 +14,26 @@ catatan diambil dari entri file ini, sehingga setiap deploy production selalu
 punya versi dan riwayat perubahan yang terekam. Versi yang sedang berjalan bisa
 dicek di `GET /api/v1/health` (field `version`).
 
+## [Belum dirilis]
+
+### Changed
+
+- **Composer respons (peserta):** input jawaban/komentar/issue di Learning
+  Player kini rich editor (TipTap) — bold, italic, daftar, tautan, kode, blok
+  kode, dan gambar via URL (https, kebijakan `src` sama dengan materi). Client
+  mengirim JSON dokumen; server melakukan PRUNE → RENDER → SANITIZE (pola §8.4
+  yang sama dengan materi, whitelist lebih sempit: tanpa heading). Plain text
+  hasil ekstraksi tetap tersimpan di `responses.content` (snippet admin, CHECK
+  panjang, scoring; respons hanya-gambar disimpan sebagai placeholder
+  `[alt|gambar]`); HTML tersanitasi tersimpan di kolom baru
+  `responses.content_html` (migrasi 0002). Respons lama era plain-text tetap
+  tampil apa adanya.
+- **Visibilitas timeline respons (revisi A-B08):** timeline Jawaban & Komentar
+  di Learning Player kini hanya menampilkan respons milik peserta itu sendiri;
+  tab Issue tetap memperlihatkan issue seluruh peserta (kendala dialami
+  bersama, mencegah laporan duplikat). Admin tetap melihat seluruh respons
+  lewat layar Responses dan detail peserta, kini dirender rich.
+
 ## [0.2.0] — 2026-08-14
 
 ### Changed

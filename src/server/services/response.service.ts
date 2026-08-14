@@ -1,10 +1,14 @@
 import { sql } from 'drizzle-orm';
 
+import { renderResponseContent } from '@/lib/sanitize-html';
+import { responseContentSchema } from '@/lib/validation/response';
 import type { CreateResponseInput, ResponseListQuery } from '@/lib/validation/response';
 
 import type { SessionUser } from '../auth/session';
 import { db } from '../db/client';
+import { env } from '../env';
 import type { IssueStatus, ResponseType } from '../db/schema/enums';
+import { AppError } from '../http/errors';
 import { decodeCursor, sliceWithCursor, timeCursorSchema } from '../http/pagination';
 import {
   assertEnrollmentInProgress,
@@ -29,6 +33,8 @@ export type ResponseItem = {
   enrollmentId: number;
   type: ResponseType;
   content: string;
+  /** HTML tersanitasi dari rich editor; `null` untuk respons lama plain-text. */
+  contentHtml: string | null;
   issueStatus: IssueStatus | null;
   createdAt: string;
   author: { id: number; name: string; initials: string };
@@ -40,6 +46,7 @@ type ResponseRow = {
   enrollment_id: number;
   type: ResponseType;
   content: string;
+  content_html: string | null;
   issue_status: IssueStatus | null;
   created_at: Date;
   author_id: number;
@@ -61,6 +68,7 @@ function toItem(row: ResponseRow): ResponseItem {
     enrollmentId: row.enrollment_id,
     type: row.type,
     content: row.content,
+    contentHtml: row.content_html,
     issueStatus: row.issue_status,
     createdAt: new Date(row.created_at).toISOString(),
     author: {
@@ -74,14 +82,15 @@ function toItem(row: ResponseRow): ResponseItem {
 /**
  * `GET /materials/:materialId/responses` — cursor 20 item (§3.3).
  *
- * ASUMSI EKSPLISIT (A-B08): timeline menampilkan respons SELURUH peserta pada
- * materi tersebut, bukan hanya milik pemanggil. Dasarnya index #11
- * `(material_id, type, created_at DESC)` yang sengaja TIDAK memuat
- * `enrollment_id` — index per-peserta (#12) dicadangkan untuk layar admin — dan
- * penamaan panelnya di PRD §3.A.4: "Discussion & Responses".
+ * REVISI A-B08: timeline `answer`/`comment` HANYA menampilkan respons milik
+ * pemanggil sendiri (`user_id = user.id`); `issue` sengaja TETAP terlihat oleh
+ * seluruh peserta materi tersebut — kendala biasanya dialami bersama, dan
+ * melihat issue orang lain mencegah laporan duplikat. Endpoint ini
+ * participant-only (`requireParticipant` di route); admin melihat SEMUA respons
+ * lewat layar admin sendiri (`/admin/events/:id/responses` dan detail peserta).
  *
- * Berjalan sebagai keyset `(created_at DESC, id DESC)` supaya sort+limit 20
- * dilayani langsung oleh index, tanpa sort node.
+ * Berjalan sebagai keyset `(created_at DESC, id DESC)`; filter kepemilikan
+ * menyaring hasil index #11 `(material_id, type, created_at DESC)`.
  */
 export async function listResponses(
   materialId: number,
@@ -94,11 +103,12 @@ export async function listResponses(
   const cursor = decodeCursor(query.cursor, timeCursorSchema);
 
   const rows = (await db.execute<ResponseRow>(sql`
-    SELECT r.id, r.material_id, r.enrollment_id, r.type, r.content, r.issue_status,
-           r.created_at, u.id AS author_id, u.name AS author_name
+    SELECT r.id, r.material_id, r.enrollment_id, r.type, r.content, r.content_html,
+           r.issue_status, r.created_at, u.id AS author_id, u.name AS author_name
       FROM responses r
       JOIN users u ON u.id = r.user_id
      WHERE r.material_id = ${materialId}
+       AND (r.type = 'issue' OR r.user_id = ${user.id})
        AND (${query.type ?? null}::text IS NULL OR r.type = ${query.type ?? null}::response_type)
        AND (
          ${cursor?.at ?? null}::timestamptz IS NULL
@@ -138,14 +148,40 @@ export async function createResponse(
   // CHECK di database (§2.7); nilai awalnya selalu `open`.
   const issueStatus = input.type === 'issue' ? 'open' : null;
 
+  // Jalur rich editor: `contentJson` di-PRUNE → RENDER → SANITIZE di server
+  // (§8.4). Plain text hasil ekstraksi tetap wajib lolos aturan panjang 1–5000
+  // — dokumen yang hanya berisi node kosong ditolak di sini, bukan oleh CHECK.
+  let content: string;
+  let contentHtml: string | null;
+  if (input.contentJson !== null && input.contentJson !== undefined) {
+    const rendered = renderResponseContent(input.contentJson, {
+      mediaPublicHost: env.MEDIA_PUBLIC_HOST,
+    });
+    const parsed = responseContentSchema.safeParse(rendered.text);
+    if (!parsed.success) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        undefined,
+        parsed.error.issues[0]?.message ?? 'Respons tidak valid.',
+      );
+    }
+    content = parsed.data;
+    contentHtml = rendered.html;
+  } else {
+    // Jalur kompatibilitas: klien lama mengirim plain text; `createResponseSchema`
+    // menjamin salah satu dari `content`/`contentJson` pasti ada.
+    content = input.content as string;
+    contentHtml = null;
+  }
+
   const inserted = (await db.execute<ResponseRow>(sql`
     WITH baru AS (
-      INSERT INTO responses (enrollment_id, material_id, user_id, type, content, issue_status)
+      INSERT INTO responses (enrollment_id, material_id, user_id, type, content, content_html, issue_status)
       VALUES (${enrollment.enrollmentId}, ${materialId}, ${user.id},
-              ${input.type}::response_type, ${input.content}, ${issueStatus}::issue_status)
-      RETURNING id, material_id, enrollment_id, type, content, issue_status, created_at, user_id
+              ${input.type}::response_type, ${content}, ${contentHtml}, ${issueStatus}::issue_status)
+      RETURNING id, material_id, enrollment_id, type, content, content_html, issue_status, created_at, user_id
     )
-    SELECT b.id, b.material_id, b.enrollment_id, b.type, b.content, b.issue_status, b.created_at,
+    SELECT b.id, b.material_id, b.enrollment_id, b.type, b.content, b.content_html, b.issue_status, b.created_at,
            u.id AS author_id, u.name AS author_name
       FROM baru b JOIN users u ON u.id = b.user_id
   `)) as unknown as ResponseRow[];

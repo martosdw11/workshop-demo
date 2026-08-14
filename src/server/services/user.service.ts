@@ -196,6 +196,8 @@ export type ParticipantEventDrilldown = {
     materialTitle: string;
     type: ResponseType;
     content: string;
+    /** HTML tersanitasi dari rich editor respons; `null` untuk respons lama. */
+    contentHtml: string | null;
     issueStatus: 'open' | 'resolved' | null;
     createdAt: string;
   }[];
@@ -249,11 +251,12 @@ export async function getParticipantEventDrilldown(
     material_title: string;
     type: ResponseType;
     content: string;
+    content_html: string | null;
     issue_status: 'open' | 'resolved' | null;
     created_at: Date;
   }>(sql`
     SELECT r.id, r.material_id, m.title AS material_title, r.type, r.content,
-           r.issue_status, r.created_at
+           r.content_html, r.issue_status, r.created_at
       FROM responses r JOIN materials m ON m.id = r.material_id
      WHERE r.enrollment_id = ${enrollment.id}
      ORDER BY r.created_at DESC
@@ -263,6 +266,7 @@ export async function getParticipantEventDrilldown(
     material_title: string;
     type: ResponseType;
     content: string;
+    content_html: string | null;
     issue_status: 'open' | 'resolved' | null;
     created_at: Date;
   }[];
@@ -283,6 +287,7 @@ export async function getParticipantEventDrilldown(
       materialTitle: row.material_title,
       type: row.type,
       content: row.content,
+      contentHtml: row.content_html,
       issueStatus: row.issue_status,
       createdAt: new Date(row.created_at).toISOString(),
     })),

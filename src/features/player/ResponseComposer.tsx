@@ -6,14 +6,19 @@ import * as React from 'react';
 
 import { MaterialIcon } from '@/components/shared/MaterialIcon';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/sonner';
 import { api, isApiError } from '@/lib/api-client';
 import { messageForError, rateLimitMessage } from '@/lib/error-messages';
 import { qk } from '@/lib/query-keys';
 import { LIMITS } from '@/lib/constants';
 import { responseContentSchema } from '@/lib/validation/response';
-import { RESPONSE_TAB_LABELS, type ResponseItemData, type ResponseType } from './types';
+import { ResponseRichEditor } from './ResponseRichEditor';
+import {
+  RESPONSE_TAB_LABELS,
+  type ResponseDoc,
+  type ResponseItemData,
+  type ResponseType,
+} from './types';
 
 /**
  * ResponseComposer — TDD §6.6.
@@ -45,17 +50,22 @@ export function ResponseComposer({
 }) {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const [content, setContent] = React.useState('');
+  // Rich editor (§8.4): `doc` (JSON TipTap) dikirim ke API; `text` hasil
+  // ekstraksi editor dipakai validasi panjang di client + optimistic update.
+  const [draft, setDraft] = React.useState<{ doc: ResponseDoc; text: string } | null>(null);
+  // Remount editor (ganti `key`) adalah cara reset paling sederhana yang tidak
+  // menuntut composer memegang instance editor.
+  const [editorKey, setEditorKey] = React.useState(0);
   const [error, setError] = React.useState<string | null>(null);
   const [announcement, setAnnouncement] = React.useState('');
 
   const queryKey = qk.player.responses(materialId, type);
 
   const mutation = useMutation({
-    mutationFn: (value: string) =>
+    mutationFn: (value: { doc: ResponseDoc; text: string }) =>
       api.post<{ response: ResponseItemData; materialWillEarnPoints: boolean }>(
         `/materials/${materialId}/responses`,
-        { type, content: value },
+        { type, contentJson: value.doc },
       ),
 
     onMutate: async (value) => {
@@ -63,12 +73,16 @@ export function ResponseComposer({
       const previous = queryClient.getQueryData<InfiniteData<ResponsePage>>(queryKey);
 
       // ID sementara negatif: tidak mungkin bertabrakan dengan id dari database.
+      // `contentHtml` optimistic sengaja `null`: HTML hanya boleh datang dari
+      // sanitasi server (§8.4), jadi item sementara dirender sebagai plain text
+      // sampai `201` membawa HTML asli.
       const optimistic: ResponseItemData = {
         id: -Date.now(),
         materialId,
         enrollmentId,
         type,
-        content: value,
+        content: value.text.trim(),
+        contentHtml: null,
         issueStatus: type === 'issue' ? 'open' : null,
         createdAt: new Date().toISOString(),
         author,
@@ -126,7 +140,8 @@ export function ResponseComposer({
         };
       });
 
-      setContent('');
+      setDraft(null);
+      setEditorKey((key) => key + 1);
       setError(null);
       setAnnouncement(
         data.materialWillEarnPoints
@@ -141,30 +156,36 @@ export function ResponseComposer({
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    const parsed = responseContentSchema.safeParse(content);
+    const parsed = responseContentSchema.safeParse(draft?.text ?? '');
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Respons tidak valid.');
       return;
     }
-    mutation.mutate(parsed.data);
+    if (!draft) {
+      setError('Respons tidak boleh kosong.');
+      return;
+    }
+    mutation.mutate(draft);
   };
 
-  const remaining = LIMITS.responseContentMax - content.length;
+  const textLength = draft?.text.trim().length ?? 0;
+  const remaining = LIMITS.responseContentMax - textLength;
 
   return (
     <form onSubmit={submit} className="mb-8">
       <label htmlFor={`composer-${type}`} className="sr-only">
         Tulis {RESPONSE_TAB_LABELS[type]}
       </label>
-      <Textarea
+      <ResponseRichEditor
+        key={editorKey}
         id={`composer-${type}`}
-        value={content}
-        onChange={(event) => setContent(event.target.value)}
         placeholder={`Tulis ${RESPONSE_TAB_LABELS[type].toLowerCase()} Anda di sini…`}
-        maxLength={LIMITS.responseContentMax}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? `composer-${type}-error` : undefined}
-        className="min-h-32 resize-y"
+        invalid={Boolean(error)}
+        describedBy={error ? `composer-${type}-error` : undefined}
+        onChange={(value) => {
+          setDraft(value);
+          if (error) setError(null);
+        }}
       />
 
       <div className="mt-2 flex items-center justify-between gap-4">
@@ -180,7 +201,7 @@ export function ResponseComposer({
           )}
         </div>
 
-        <Button type="submit" disabled={mutation.isPending || content.trim() === ''}>
+        <Button type="submit" disabled={mutation.isPending || textLength === 0}>
           <MaterialIcon name="send" className="text-[18px]" />
           {mutation.isPending ? 'Mengirim…' : 'Submit Response'}
         </Button>

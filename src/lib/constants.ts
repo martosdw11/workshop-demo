@@ -63,6 +63,25 @@ export const ALLOWED_TIPTAP_NODES = [
 
 export const ALLOWED_TIPTAP_MARKS = ['bold', 'italic', 'link', 'code'] as const;
 
+/**
+ * Whitelist untuk RESPONS peserta — lebih sempit dari materi: tanpa `heading`
+ * (h1–h3 dicadangkan untuk konten materi). `image` diizinkan (mode insert-URL,
+ * kebijakan `src` sama dengan materi: https / host media sendiri).
+ */
+export const ALLOWED_RESPONSE_NODES = [
+  'doc',
+  'paragraph',
+  'bulletList',
+  'orderedList',
+  'listItem',
+  'image',
+  'codeBlock',
+  'hardBreak',
+  'text',
+] as const;
+
+export const ALLOWED_RESPONSE_MARKS = ALLOWED_TIPTAP_MARKS;
+
 /** Format media yang diterima upload (TDD §8.3). */
 export const ALLOWED_IMAGE_MIME = ['image/jpeg', 'image/png', 'image/webp'] as const;
 export type AllowedImageMime = (typeof ALLOWED_IMAGE_MIME)[number];

@@ -89,9 +89,17 @@ function EnrollmentDrilldown({ userId, eventId }: { userId: number; eventId: num
                     {response.materialTitle} · {formatDateTime(response.createdAt)}
                   </span>
                 </div>
-                <p className="whitespace-pre-wrap text-body-sm text-on-surface-variant">
-                  {response.content}
-                </p>
+                {response.contentHtml ? (
+                  <div
+                    className="prose-material text-body-sm text-on-surface-variant"
+                    // HTML sudah tersanitasi DI SERVER (`renderResponseContent`, §8.4).
+                    dangerouslySetInnerHTML={{ __html: response.contentHtml }}
+                  />
+                ) : (
+                  <p className="whitespace-pre-wrap text-body-sm text-on-surface-variant">
+                    {response.content}
+                  </p>
+                )}
               </li>
             ))}
           </ul>

@@ -184,6 +184,8 @@ export type AdminResponseItem = {
   id: number;
   type: ResponseType;
   content: string;
+  /** HTML tersanitasi dari rich editor respons; `null` untuk respons lama. */
+  contentHtml: string | null;
   issueStatus: IssueStatus | null;
   createdAt: string;
   material: { id: number; title: string; depth: number };
@@ -203,6 +205,7 @@ export async function getEventResponses(
     id: number;
     type: ResponseType;
     content: string;
+    content_html: string | null;
     issue_status: IssueStatus | null;
     created_at: Date;
     material_id: number;
@@ -212,7 +215,7 @@ export async function getEventResponses(
     name: string;
     email: string;
   }>(sql`
-    SELECT r.id, r.type, r.content, r.issue_status, r.created_at,
+    SELECT r.id, r.type, r.content, r.content_html, r.issue_status, r.created_at,
            m.id AS material_id, m.title AS material_title, m.depth,
            u.id AS user_id, u.name, u.email
       FROM responses r
@@ -235,6 +238,7 @@ export async function getEventResponses(
     id: number;
     type: ResponseType;
     content: string;
+    content_html: string | null;
     issue_status: IssueStatus | null;
     created_at: Date;
     material_id: number;
@@ -255,6 +259,7 @@ export async function getEventResponses(
       id: row.id,
       type: row.type,
       content: row.content,
+      contentHtml: row.content_html,
       issueStatus: row.issue_status,
       createdAt: new Date(row.created_at).toISOString(),
       material: { id: row.material_id, title: row.material_title, depth: row.depth },
@@ -291,6 +296,7 @@ export async function updateIssueStatus(
     id: number;
     type: ResponseType;
     content: string;
+    content_html: string | null;
     issue_status: IssueStatus | null;
     created_at: Date;
     material_id: number;
@@ -303,9 +309,9 @@ export async function updateIssueStatus(
     WITH diperbarui AS (
       UPDATE responses SET issue_status = ${issueStatus}::issue_status
        WHERE id = ${responseId} AND type = 'issue'
-      RETURNING id, type, content, issue_status, created_at, material_id, user_id
+      RETURNING id, type, content, content_html, issue_status, created_at, material_id, user_id
     )
-    SELECT d.id, d.type, d.content, d.issue_status, d.created_at,
+    SELECT d.id, d.type, d.content, d.content_html, d.issue_status, d.created_at,
            m.id AS material_id, m.title AS material_title, m.depth,
            u.id AS user_id, u.name, u.email
       FROM diperbarui d
@@ -315,6 +321,7 @@ export async function updateIssueStatus(
     id: number;
     type: ResponseType;
     content: string;
+    content_html: string | null;
     issue_status: IssueStatus | null;
     created_at: Date;
     material_id: number;
@@ -330,6 +337,7 @@ export async function updateIssueStatus(
     id: row.id,
     type: row.type,
     content: row.content,
+    contentHtml: row.content_html,
     issueStatus: row.issue_status,
     createdAt: new Date(row.created_at).toISOString(),
     material: { id: row.material_id, title: row.material_title, depth: row.depth },

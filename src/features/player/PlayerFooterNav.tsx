@@ -81,13 +81,13 @@ export function PlayerFooterNav({
             : `Materi ini sudah pernah diselesaikan. Progres ${data.enrollment.progressPercent} persen.`,
       );
 
-      if (data.awarded) {
-        toast.success(`+${formatNumber(data.pointsEarned)} poin diperoleh`);
-      } else if (data.reason === 'NO_ANSWER_RESPONSE') {
-        toast.message('Materi ditandai selesai tanpa poin', {
-          description: 'Poin materi hanya diberikan bila ada minimal satu respons bertipe Jawaban.',
-        });
-      }
+      // if (data.awarded) {
+      //   toast.success(`+${formatNumber(data.pointsEarned)} poin diperoleh`);
+      // } else if (data.reason === 'NO_ANSWER_RESPONSE') {
+      //   toast.message('Materi ditandai selesai tanpa poin', {
+      //     description: 'Poin materi hanya diberikan bila ada minimal satu respons bertipe Jawaban.',
+      //   });
+      // }
 
       invalidatePlayer();
 

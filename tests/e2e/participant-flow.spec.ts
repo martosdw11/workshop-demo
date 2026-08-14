@@ -112,9 +112,12 @@ test('katalog → join → belajar → finish → result → dashboard', async (
   ).toBeVisible();
 
   // --- Jawab materi 1 lalu Next (Next = complete + navigasi) ------------------
-  await page.getByPlaceholder('Tulis jawaban Anda di sini…').fill('Jawaban materi satu.');
+  // Composer kini rich editor (contenteditable), bukan <textarea> — placeholder
+  // menjadi aria-label, dan hasil kirim dicek DI TIMELINE (<li>) supaya tidak
+  // bentrok dengan teks yang mungkin masih ada di editor.
+  await page.getByLabel('Tulis jawaban Anda di sini…').fill('Jawaban materi satu.');
   await page.getByRole('button', { name: 'Submit Response' }).click();
-  await expect(page.getByText('Jawaban materi satu.')).toBeVisible();
+  await expect(page.getByRole('listitem').getByText('Jawaban materi satu.')).toBeVisible();
 
   await page.getByRole('button', { name: 'Next' }).click();
   await expect(page.getByText('+60 poin diperoleh')).toBeVisible();
@@ -122,9 +125,9 @@ test('katalog → join → belajar → finish → result → dashboard', async (
   await expect(page.getByRole('heading', { name: MATERI_2 })).toBeVisible();
 
   // --- Jawab materi terakhir lalu Finish --------------------------------------
-  await page.getByPlaceholder('Tulis jawaban Anda di sini…').fill('Jawaban materi dua.');
+  await page.getByLabel('Tulis jawaban Anda di sini…').fill('Jawaban materi dua.');
   await page.getByRole('button', { name: 'Submit Response' }).click();
-  await expect(page.getByText('Jawaban materi dua.')).toBeVisible();
+  await expect(page.getByRole('listitem').getByText('Jawaban materi dua.')).toBeVisible();
 
   await page.getByRole('button', { name: 'Finish' }).click();
   const finishDialog = page.getByRole('dialog');

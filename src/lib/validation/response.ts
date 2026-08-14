@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { LIMITS, PAGE_SIZE, RESPONSE_TYPES } from '../constants';
 import { cursorParam, idNumber, limitParam } from './common';
+import { contentJsonSchema } from './material';
 
 /** Validasi respons peserta — TDD §9.2 (1–5000 karakter setelah trim). */
 
@@ -15,10 +16,23 @@ export const responseContentSchema = z
   .min(LIMITS.responseContentMin, 'Respons tidak boleh kosong.')
   .max(LIMITS.responseContentMax, `Respons maksimal ${LIMITS.responseContentMax} karakter.`);
 
-export const createResponseSchema = z.object({
-  type: responseTypeSchema,
-  content: responseContentSchema,
-});
+/**
+ * Rich editor respons mengirim `contentJson` (dokumen TipTap; bentuk detailnya
+ * dibersihkan saat PRUNE di server — alasan yang sama dengan materi, lihat
+ * `contentJsonSchema`). `content` plain text tetap diterima untuk kompatibilitas
+ * mundur; validasi panjang 1–5000 pada jalur `contentJson` terjadi SETELAH
+ * ekstraksi teks di service (`renderResponseContent`).
+ */
+export const createResponseSchema = z
+  .object({
+    type: responseTypeSchema,
+    content: responseContentSchema.optional(),
+    contentJson: contentJsonSchema,
+  })
+  .refine((value) => value.content !== undefined || value.contentJson !== null, {
+    message: 'Respons tidak boleh kosong.',
+    path: ['content'],
+  });
 
 export const responseListQuerySchema = z.object({
   type: responseTypeSchema.optional(),
@@ -47,7 +61,15 @@ export const activityQuerySchema = z.object({
   limit: limitParam(PAGE_SIZE.activity),
 });
 
-export type CreateResponseInput = z.infer<typeof createResponseSchema>;
+/**
+ * `contentJson` dilonggarkan menjadi opsional di tipe (bukan di schema):
+ * keluaran `parseBody` selalu mengisinya (`null` bila absen), tapi pemanggil
+ * langsung service — tes integrasi & klien plain-text lama — cukup mengirim
+ * `content` saja.
+ */
+export type CreateResponseInput = Omit<z.infer<typeof createResponseSchema>, 'contentJson'> & {
+  contentJson?: z.infer<typeof contentJsonSchema>;
+};
 export type ResponseListQuery = z.infer<typeof responseListQuerySchema>;
 export type AdminResponseQuery = z.infer<typeof adminResponseQuerySchema>;
 export type ActivityQuery = z.infer<typeof activityQuerySchema>;

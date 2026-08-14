@@ -22,9 +22,11 @@ import { RESPONSE_TAB_LABELS, type ResponseItemData, type ResponseType } from '.
  * TIDAK ADA tombol like/reply (A-10) — mockup memilikinya, tapi keduanya di luar
  * §3 PRD. Sesuai A-10 tombolnya **dihapus**, bukan di-disable.
  *
- * `responses.content` adalah PLAIN TEXT dan tidak pernah dirender sebagai HTML
- * (§8.4) — di sini ia masuk sebagai text node biasa, dengan `whitespace-pre-wrap`
- * agar baris baru yang diketik peserta tetap terlihat.
+ * Konten: `contentHtml` adalah keluaran rich editor yang **sudah tersanitasi
+ * DI SERVER** (`renderResponseContent`, §8.4) — hanya itu yang boleh masuk
+ * `dangerouslySetInnerHTML`. Respons lama era plain-text (`contentHtml: null`)
+ * dan item optimistic jatuh kembali ke `content` sebagai text node biasa
+ * dengan `whitespace-pre-wrap`.
  */
 export function ResponseItem({ item }: { item: ResponseItemData }) {
   const isOptimistic = item.id < 0;
@@ -55,7 +57,14 @@ export function ResponseItem({ item }: { item: ResponseItemData }) {
             </span>
           </span>
         </div>
-        <p className="whitespace-pre-wrap text-body-md text-on-surface-variant">{item.content}</p>
+        {item.contentHtml ? (
+          <div
+            className="prose-material text-body-md text-on-surface-variant"
+            dangerouslySetInnerHTML={{ __html: item.contentHtml }}
+          />
+        ) : (
+          <p className="whitespace-pre-wrap text-body-md text-on-surface-variant">{item.content}</p>
+        )}
       </div>
     </li>
   );

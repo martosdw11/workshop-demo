@@ -31,8 +31,17 @@ export const responses = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     type: responseTypeEnum('type').notNull(),
-    /** Plain text — TIDAK PERNAH dirender sebagai HTML (TDD §8.4). */
+    /**
+     * Plain text hasil ekstraksi dokumen editor — dipakai snippet admin,
+     * CHECK panjang, dan scoring. Kolom ini TIDAK PERNAH dirender sebagai HTML.
+     */
     content: text('content').notNull(),
+    /**
+     * HTML tersanitasi dari rich editor respons (`renderResponseContent`,
+     * §8.4 pola yang sama dengan `materials.content_html`). `NULL` untuk
+     * respons lama era plain-text — FE jatuh kembali ke `content`.
+     */
+    contentHtml: text('content_html'),
     /** Hanya bermakna untuk `type = 'issue'`. */
     issueStatus: issueStatusEnum('issue_status'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
