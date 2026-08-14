@@ -32,7 +32,20 @@ export type ResponseItemData = {
   createdAt: string;
   /** Terisi bila penulis pernah meng-edit respons ini — FE menampilkan "(diedit)". */
   editedAt: string | null;
+  /** Jumlah komentar thread — hanya bermakna untuk `type = 'issue'`. */
+  commentCount: number;
   author: { id: number; name: string; initials: string };
+};
+
+/** Komentar thread pada kartu issue — bentuk kontrak `GET /responses/:id/comments`. */
+export type IssueCommentData = {
+  id: number;
+  responseId: number;
+  content: string;
+  contentHtml: string | null;
+  createdAt: string;
+  editedAt: string | null;
+  author: { id: number; name: string; initials: string; isAdmin: boolean };
 };
 
 export type CompleteResultData = {

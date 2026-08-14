@@ -38,6 +38,15 @@ dicek di `GET /api/v1/health` (field `version`).
   complete berikutnya. Admin mendapat all-access moderasi: tombol Hapus pada
   layar Responses dapat menghapus respons milik siapa pun
   (`DELETE /api/v1/admin/responses/:id`).
+- **Thread komentar issue:** setiap kartu issue kini punya thread komentar
+  sendiri (tabel baru `issue_comments`, migrasi 0004) sehingga diskusi fokus
+  pada satu postingan. Seluruh peserta event — bukan hanya penulis issue — dan
+  admin (dengan badge Admin, tanpa perlu enrollment) dapat membantu di
+  dalamnya, dari Learning Player maupun layar admin Responses. Komentar memakai
+  rich editor yang sama; edit hanya milik sendiri, hapus milik sendiri atau
+  admin; ikut terhapus bersama issue-nya. Endpoint:
+  `GET/POST /api/v1/responses/:id/comments`,
+  `PATCH/DELETE /api/v1/issue-comments/:id`.
 - **Visibilitas timeline respons (revisi A-B08):** timeline Jawaban & Komentar
   di Learning Player kini hanya menampilkan respons milik peserta itu sendiri;
   tab Issue tetap memperlihatkan issue seluruh peserta (kendala dialami

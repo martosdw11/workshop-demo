@@ -11,5 +11,6 @@ export * from './materials';
 export * from './enrollments';
 export * from './progress';
 export * from './responses';
+export * from './issue-comments';
 export * from './ratelimit';
 export * from './relations';

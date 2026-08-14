@@ -81,6 +81,8 @@ export type EventResponseRow = {
   content: string;
   /** HTML tersanitasi di server dari rich editor; `null` untuk respons lama. */
   contentHtml: string | null;
+  /** Jumlah komentar thread — hanya bermakna untuk `type = 'issue'`. */
+  commentCount: number;
   issueStatus: 'open' | 'resolved' | null;
   createdAt: string;
   material: { id: number; title: string; depth: number };

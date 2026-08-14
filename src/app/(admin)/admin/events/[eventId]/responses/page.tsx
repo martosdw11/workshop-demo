@@ -6,6 +6,7 @@ import { TableSkeleton } from '@/components/shared/LoadingSkeletons';
 import { EventDetailTabs } from '@/features/people/EventDetailTabs';
 import { EventResponsesTable } from '@/features/people/EventResponsesTable';
 import type { MatrixMaterialData } from '@/features/people/types';
+import { requireAdmin } from '@/server/auth/rbac';
 import { isAppError } from '@/server/http/errors';
 import { getAdminEventDetail } from '@/server/services/event.service';
 import { getEventTree } from '@/server/services/material.service';
@@ -44,6 +45,8 @@ export default async function EventResponsesPage({
     Number.isInteger(parsedMaterialId) && parsedMaterialId > 0 ? parsedMaterialId : null;
 
   try {
+    // id admin dipakai FE menandai komentar thread milik sendiri (aksi edit).
+    const admin = await requireAdmin();
     const [detail, tree] = await Promise.all([getAdminEventDetail(eventId), getEventTree(eventId)]);
 
     const materials: MatrixMaterialData[] = tree.tree.flatMap((module) => [
@@ -79,6 +82,7 @@ export default async function EventResponsesPage({
             type={type}
             materialId={materialId}
             issueStatus={issueStatus}
+            adminUserId={admin.id}
           />
         </Suspense>
       </div>

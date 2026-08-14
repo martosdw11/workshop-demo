@@ -186,6 +186,8 @@ export type AdminResponseItem = {
   content: string;
   /** HTML tersanitasi dari rich editor respons; `null` untuk respons lama. */
   contentHtml: string | null;
+  /** Jumlah komentar thread — hanya bermakna untuk `type = 'issue'`. */
+  commentCount: number;
   issueStatus: IssueStatus | null;
   createdAt: string;
   material: { id: number; title: string; depth: number };
@@ -206,6 +208,7 @@ export async function getEventResponses(
     type: ResponseType;
     content: string;
     content_html: string | null;
+    comment_count?: number;
     issue_status: IssueStatus | null;
     created_at: Date;
     material_id: number;
@@ -216,6 +219,7 @@ export async function getEventResponses(
     email: string;
   }>(sql`
     SELECT r.id, r.type, r.content, r.content_html, r.issue_status, r.created_at,
+           (SELECT count(*) FROM issue_comments c WHERE c.response_id = r.id) AS comment_count,
            m.id AS material_id, m.title AS material_title, m.depth,
            u.id AS user_id, u.name, u.email
       FROM responses r
@@ -239,6 +243,7 @@ export async function getEventResponses(
     type: ResponseType;
     content: string;
     content_html: string | null;
+    comment_count?: number;
     issue_status: IssueStatus | null;
     created_at: Date;
     material_id: number;
@@ -260,6 +265,7 @@ export async function getEventResponses(
       type: row.type,
       content: row.content,
       contentHtml: row.content_html,
+      commentCount: Number(row.comment_count ?? 0),
       issueStatus: row.issue_status,
       createdAt: new Date(row.created_at).toISOString(),
       material: { id: row.material_id, title: row.material_title, depth: row.depth },
@@ -294,6 +300,7 @@ export async function updateIssueStatus(
     type: ResponseType;
     content: string;
     content_html: string | null;
+    comment_count?: number;
     issue_status: IssueStatus | null;
     created_at: Date;
     material_id: number;
@@ -309,6 +316,7 @@ export async function updateIssueStatus(
       RETURNING id, type, content, content_html, issue_status, created_at, material_id, user_id
     )
     SELECT d.id, d.type, d.content, d.content_html, d.issue_status, d.created_at,
+           (SELECT count(*) FROM issue_comments c WHERE c.response_id = d.id) AS comment_count,
            m.id AS material_id, m.title AS material_title, m.depth,
            u.id AS user_id, u.name, u.email
       FROM diperbarui d
@@ -319,6 +327,7 @@ export async function updateIssueStatus(
     type: ResponseType;
     content: string;
     content_html: string | null;
+    comment_count?: number;
     issue_status: IssueStatus | null;
     created_at: Date;
     material_id: number;
@@ -335,6 +344,7 @@ export async function updateIssueStatus(
     type: row.type,
     content: row.content,
     contentHtml: row.content_html,
+    commentCount: Number(row.comment_count ?? 0),
     issueStatus: row.issue_status,
     createdAt: new Date(row.created_at).toISOString(),
     material: { id: row.material_id, title: row.material_title, depth: row.depth },

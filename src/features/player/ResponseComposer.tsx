@@ -86,6 +86,7 @@ export function ResponseComposer({
         issueStatus: type === 'issue' ? 'open' : null,
         createdAt: new Date().toISOString(),
         editedAt: null,
+        commentCount: 0,
         author,
       };
 

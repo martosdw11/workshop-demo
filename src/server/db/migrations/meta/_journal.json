@@ -29,6 +29,13 @@
       "when": 1786698923135,
       "tag": "0003_response_edited_at",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786701297362,
+      "tag": "0004_issue_comments",
+      "breakpoints": true
     }
   ]
 }

@@ -37,6 +37,9 @@ export const qk = {
       ['player', 'responses', materialId, type] as const,
   },
 
+  /** Thread komentar issue — dipakai peserta DAN admin (komponen bersama). */
+  issueComments: (responseId: number) => ['issue-comments', responseId] as const,
+
   admin: {
     all: ['admin'] as const,
 

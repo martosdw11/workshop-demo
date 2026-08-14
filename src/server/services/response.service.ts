@@ -50,6 +50,8 @@ export type ResponseItem = {
   createdAt: string;
   /** Terisi bila penulis pernah meng-edit respons ini. */
   editedAt: string | null;
+  /** Jumlah komentar thread — hanya bermakna untuk `type = 'issue'`. */
+  commentCount: number;
   author: { id: number; name: string; initials: string };
 };
 
@@ -63,6 +65,7 @@ type ResponseRow = {
   issue_status: IssueStatus | null;
   created_at: Date;
   edited_at: Date | null;
+  comment_count?: number;
   author_id: number;
   author_name: string;
 };
@@ -86,6 +89,7 @@ function toItem(row: ResponseRow): ResponseItem {
     issueStatus: row.issue_status,
     createdAt: new Date(row.created_at).toISOString(),
     editedAt: row.edited_at ? new Date(row.edited_at).toISOString() : null,
+    commentCount: Number(row.comment_count ?? 0),
     author: {
       id: row.author_id,
       name: row.author_name,
@@ -119,7 +123,8 @@ export async function listResponses(
 
   const rows = (await db.execute<ResponseRow>(sql`
     SELECT r.id, r.material_id, r.enrollment_id, r.type, r.content, r.content_html,
-           r.issue_status, r.created_at, r.edited_at, u.id AS author_id, u.name AS author_name
+           r.issue_status, r.created_at, r.edited_at, u.id AS author_id, u.name AS author_name,
+           (SELECT count(*) FROM issue_comments c WHERE c.response_id = r.id) AS comment_count
       FROM responses r
       JOIN users u ON u.id = r.user_id
      WHERE r.material_id = ${materialId}
@@ -147,8 +152,11 @@ export async function listResponses(
  * — dokumen yang hanya berisi node kosong ditolak di sini, bukan oleh CHECK.
  * Jalur kompatibilitas: klien lama mengirim `content` plain text; schema
  * menjamin salah satu dari keduanya pasti ada.
+ *
+ * Diekspor: dipakai juga oleh `issue-comment.service` (thread komentar issue)
+ * agar kebijakan sanitasi & panjangnya identik.
  */
-function deriveContent(input: { content?: string; contentJson?: unknown | null }): {
+export function deriveContent(input: { content?: string; contentJson?: unknown | null }): {
   content: string;
   contentHtml: string | null;
 } {

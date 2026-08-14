@@ -22,6 +22,7 @@ import { messageForError } from '@/lib/error-messages';
 import { formatRelativeTime } from '@/lib/format';
 import { qk } from '@/lib/query-keys';
 import { cn } from '@/lib/utils';
+import { IssueThread } from './IssueThread';
 import { ResponseRichEditor } from './ResponseRichEditor';
 import {
   RESPONSE_TAB_LABELS,
@@ -44,13 +45,17 @@ import {
  *
  * `actions` (opsional) dirender di pojok kanan header — dipakai timeline untuk
  * tombol Edit/Hapus pada pesan milik user login sendiri (semua tipe).
+ * `children` (opsional) dirender DI DALAM kartu setelah konten — dipakai untuk
+ * thread komentar issue.
  */
 export function ResponseItem({
   item,
   actions,
+  children,
 }: {
   item: ResponseItemData;
   actions?: React.ReactNode;
+  children?: React.ReactNode;
 }) {
   const isOptimistic = item.id < 0;
 
@@ -90,6 +95,7 @@ export function ResponseItem({
         ) : (
           <p className="whitespace-pre-wrap text-body-md text-on-surface-variant">{item.content}</p>
         )}
+        {children}
       </div>
     </li>
   );
@@ -305,7 +311,18 @@ export function ResponseTimeline({
                   </span>
                 ) : undefined
               }
-            />
+            >
+              {/* Thread komentar hanya pada issue nyata (bukan optimistic):
+                  seluruh peserta + admin bisa membantu di dalam kartunya. */}
+              {item.type === 'issue' && item.id > 0 && currentUserId !== undefined && (
+                <IssueThread
+                  responseId={item.id}
+                  currentUserId={currentUserId}
+                  canComment={canModify}
+                  initialCount={item.commentCount}
+                />
+              )}
+            </ResponseItem>
           );
         })}
       </ul>

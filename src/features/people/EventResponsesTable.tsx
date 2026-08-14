@@ -25,6 +25,7 @@ import { PAGE_SIZE } from '@/lib/constants';
 import { messageForError } from '@/lib/error-messages';
 import { formatDateTime } from '@/lib/format';
 import { qk } from '@/lib/query-keys';
+import { IssueThread } from '@/features/player/IssueThread';
 import { RESPONSE_TAB_LABELS } from '@/features/player/types';
 import type { EventResponseRow, MatrixMaterialData } from './types';
 
@@ -55,12 +56,15 @@ export function EventResponsesTable({
   type,
   materialId,
   issueStatus,
+  adminUserId,
 }: {
   eventId: number;
   materials: MatrixMaterialData[];
   type: string;
   materialId: number | null;
   issueStatus: string;
+  /** id admin login — penanda kepemilikan komentar thread (aksi edit). */
+  adminUserId: number;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -236,6 +240,17 @@ export function EventResponsesTable({
                   <p className="whitespace-pre-wrap text-body-sm text-on-surface-variant">
                     {row.content}
                   </p>
+                )}
+
+                {/* Thread komentar issue — admin ikut membantu & memoderasi. */}
+                {row.type === 'issue' && (
+                  <IssueThread
+                    responseId={row.id}
+                    currentUserId={adminUserId}
+                    isAdmin
+                    canComment
+                    initialCount={row.commentCount}
+                  />
                 )}
               </div>
 
