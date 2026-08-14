@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 
 import { db } from '@/server/db/client';
 
+import packageJson from '../../../../../package.json';
+
 /**
  * Health check — TDD §11.1.
  *
@@ -22,6 +24,7 @@ export async function GET() {
       {
         data: {
           status: 'ok',
+          version: packageJson.version,
           database: 'up',
           latencyMs: Date.now() - startedAt,
           checkedAt: new Date().toISOString(),

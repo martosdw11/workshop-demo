@@ -1,0 +1,61 @@
+# Changelog
+
+Semua perubahan yang dirilis ke production dicatat di file ini, per versi.
+
+Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/)
+dan penomoran mengikuti [Semantic Versioning](https://semver.org/lang/id/)
+(`MAJOR.MINOR.PATCH`).
+
+**Alur rilis:** setiap push ke `main` men-deploy production lewat Vercel Git
+Integration. Sebelum push rilis: (1) naikkan `version` di `package.json`,
+(2) tambahkan entri versi tersebut di file ini. Setelah CI hijau, job `release`
+di GitHub Actions otomatis membuat git tag `v<versi>` + GitHub Release dengan
+catatan diambil dari entri file ini, sehingga setiap deploy production selalu
+punya versi dan riwayat perubahan yang terekam. Versi yang sedang berjalan bisa
+dicek di `GET /api/v1/health` (field `version`).
+
+## [0.2.0] — 2026-08-14
+
+### Changed
+
+- **Form event (admin):** event berstatus Published kini tetap dapat diperbarui
+  (judul, deskripsi, cover, kuota) selama jadwal tidak diubah — `startAt` dan
+  `endAt` sama-sama dikunci setelah publish (`EVENT_PUBLISHED_IMMUTABLE_FIELD`).
+  Field jadwal di form builder ter-disable dengan penjelasan; kuota tetap tidak
+  boleh diturunkan di bawah jumlah peserta terdaftar.
+- **Unpublish (Published → Draft):** kini diperbolehkan walau event sudah punya
+  peserta. Enrollment yang ada tidak disentuh — peserta lama tetap bisa
+  melanjutkan, event hanya berhenti menerima peserta baru. Guard
+  `CANNOT_UNPUBLISH_WITH_ENROLLMENTS` dihapus dari alur publish.
+- **Katalog peserta:** daftar event kini berisi event aktif (published dan belum
+  berakhir) ditambah semua event yang sudah diikuti peserta — termasuk event
+  yang sudah selesai atau ditarik kembali ke Draft. Event draft tetap tak
+  terlihat (404) bagi peserta yang belum bergabung. Cache katalog menjadi
+  per-user karena daftarnya kini personal.
+
+### Added
+
+- `CHANGELOG.md` + konvensi versi per deploy production.
+- Job `release` di GitHub Actions: auto-tag `v<versi>` + GitHub Release setiap
+  versi baru mendarat di `main`.
+- Field `version` pada respons `GET /api/v1/health` untuk memverifikasi versi
+  yang sedang ter-deploy.
+
+## [0.1.0] — 2026-08-13
+
+Baseline production pertama (retrospektif; dirilis bertahap 12–13 Agustus 2026).
+
+### Added
+
+- Aplikasi Learning Study AI: autentikasi + RBAC (admin/peserta), event builder
+  dua langkah (info + kurikulum dnd-kit), katalog & enrollment peserta dengan
+  kuota anti-race, learning player berurutan dengan poin & penyelesaian,
+  dashboard admin (KPI, pipeline, respons/issue) dan dashboard peserta.
+- CI GitHub Actions (lint, typecheck, unit + integration test dengan service
+  Postgres 16); CD via Vercel Git Integration (project `workshop-demo`).
+- Database production Supabase (transaction pooler, `prepare: false` otomatis);
+  checklist di `doc/supabase-deploy.md`.
+- Mode insert-URL untuk cover & gambar konten menggantikan upload file sementara
+  (commit `098dbdd`).
+- Rate limit register konfigurabel (default 300/jam/IP) dan kolokasi fungsi
+  Vercel ke `sin1`.

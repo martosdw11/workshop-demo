@@ -127,3 +127,15 @@ database yang berbeda (TDD §11.1):
   `STORAGE_DRIVER=local` dengan volume di-mount, `pg_dump` terjadwal **wajib**.
 
 Urutan rilis: `build` → `npm run db:migrate` → deploy → cek `/api/v1/health`.
+
+### Versioning & changelog
+
+Setiap push ke `main` = deploy production, dan setiap deploy punya versi:
+
+1. Naikkan `version` di `package.json` (SemVer).
+2. Catat perubahannya sebagai entri baru di [CHANGELOG.md](CHANGELOG.md).
+3. Push ke `main` — setelah CI hijau, job `release` otomatis membuat tag
+   `v<versi>` + GitHub Release dengan catatan dari entri changelog tersebut.
+
+Versi yang sedang ter-deploy bisa dicek lewat field `version` pada
+`GET /api/v1/health`.

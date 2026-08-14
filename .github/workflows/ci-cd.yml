@@ -5,6 +5,11 @@
 #   - Deploy          : otomatis oleh Vercel Git Integration pada project
 #                       `workshop-demo` (Preview untuk PR, Production untuk main).
 #                       Tidak ada langkah deploy di sini — hindari deploy dobel.
+#   - Rilis           : job `release` (hanya push ke main, setelah CI hijau)
+#                       membuat tag `v<versi package.json>` + GitHub Release
+#                       dengan catatan dari CHANGELOG.md — satu versi tercatat
+#                       untuk setiap deploy production. Idempoten: versi yang
+#                       sudah ber-tag dilewati.
 #
 # Env build/runtime production (DATABASE_URL, SESSION_SECRET, dst.) dikelola di
 # Environment Variables project Vercel (team policy memaksa tipe Sensitive).
@@ -75,3 +80,44 @@ jobs:
 
       - name: Integration tests
         run: npm run test:integration
+
+  release:
+    name: Tag versi rilis
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Buat tag & GitHub Release bila versi baru
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          TAG="v${VERSION}"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} sudah ada — rilis dilewati."
+            exit 0
+          fi
+
+          # Catatan rilis = isi entri versi ini di CHANGELOG.md
+          # (baris setelah "## [x.y.z]" sampai heading versi berikutnya).
+          awk -v ver="${VERSION}" '
+            $0 ~ ("^## \\[" ver "\\]") { p = 1; next }
+            /^## \[/ { p = 0 }
+            p
+          ' CHANGELOG.md > /tmp/release-notes.md
+
+          if ! [ -s /tmp/release-notes.md ]; then
+            echo "PERINGATAN: entri ${VERSION} tidak ditemukan di CHANGELOG.md." > /tmp/release-notes.md
+          fi
+
+          gh release create "${TAG}" \
+            --target "${GITHUB_SHA}" \
+            --title "${TAG}" \
+            --notes-file /tmp/release-notes.md
+          echo "Rilis ${TAG} dibuat untuk commit ${GITHUB_SHA}."
