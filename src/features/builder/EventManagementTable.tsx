@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
@@ -10,7 +10,15 @@ import { ErrorState } from '@/components/shared/ErrorState';
 import { MaterialIcon } from '@/components/shared/MaterialIcon';
 import { Pagination, useCursorPagination } from '@/components/shared/Pagination';
 import { StatusPill } from '@/components/shared/StatusPill';
-import { buttonVariants } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -19,8 +27,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { apiFetchWithMeta } from '@/lib/api-client';
+import { toast } from '@/components/ui/sonner';
+import { api, apiFetchWithMeta } from '@/lib/api-client';
 import { PAGE_SIZE } from '@/lib/constants';
+import { messageForError } from '@/lib/error-messages';
 import { formatDateRange, formatNumber } from '@/lib/format';
 import { qk } from '@/lib/query-keys';
 import { cn } from '@/lib/utils';
@@ -53,7 +63,9 @@ export function EventManagementTable({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const [draftQuery, setDraftQuery] = React.useState(query);
+  const [pendingDelete, setPendingDelete] = React.useState<AdminEvent | null>(null);
   const pagination = useCursorPagination();
 
   React.useEffect(() => setDraftQuery(query), [query]);
@@ -110,6 +122,26 @@ export function EventManagementTable({
         : undefined,
   });
 
+  /**
+   * Hapus event — `DELETE /admin/events/:id`. Server menolak dengan
+   * `409 EVENT_HAS_ENROLLMENTS` bila event sudah berpeserta; tombol sudah
+   * dinonaktifkan untuk kasus itu, tapi error tetap ditangani karena peserta
+   * bisa bergabung setelah tabel dimuat.
+   */
+  const deleteMutation = useMutation({
+    mutationFn: (eventId: number) => api.delete<null>(`/admin/events/${eventId}`),
+    onSuccess: (_data, eventId) => {
+      const deleted = pendingDelete;
+      setPendingDelete(null);
+      toast.success(
+        deleted ? `Event "${deleted.title}" dihapus.` : `Event #${eventId} dihapus.`,
+      );
+      void queryClient.invalidateQueries({ queryKey: qk.admin.events.all });
+      router.refresh();
+    },
+    onError: (mutationError) => toast.error(messageForError(mutationError)),
+  });
+
   const columns: Array<DataTableColumn<AdminEvent>> = [
     {
       id: 'title',
@@ -157,6 +189,22 @@ export function EventManagementTable({
             <MaterialIcon name="group" />
             Peserta
           </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-error hover:bg-error-container/40"
+            onClick={() => setPendingDelete(row)}
+            disabled={row.enrolledCount > 0}
+            title={
+              row.enrolledCount > 0
+                ? 'Event yang sudah memiliki peserta tidak dapat dihapus.'
+                : undefined
+            }
+            aria-label={`Hapus event ${row.title}`}
+          >
+            <MaterialIcon name="delete" />
+            Hapus
+          </Button>
         </div>
       ),
     },
@@ -220,6 +268,39 @@ export function EventManagementTable({
         onPrevious={pagination.goPrevious}
         isLoading={isFetching}
       />
+
+      <Dialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleteMutation.isPending) setPendingDelete(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Hapus event ini?</DialogTitle>
+            <DialogDescription>
+              Event <strong>{pendingDelete?.title}</strong> beserta seluruh materinya akan dihapus
+              permanen dan tidak bisa dikembalikan.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => setPendingDelete(null)}
+              disabled={deleteMutation.isPending}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => pendingDelete && deleteMutation.mutate(pendingDelete.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? 'Menghapus…' : 'Hapus Event'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="sr-only" aria-live="polite">
         {isFetching ? 'Memuat daftar event' : `${data?.items.length ?? 0} event ditampilkan`}
